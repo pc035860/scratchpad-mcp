@@ -16,13 +16,17 @@ import {
   appendScratchpadTool,
   listScratchpadsTool,
   searchScratchpadsTool,
-  type CreateWorkflowArgs,
-  type CreateScratchpadArgs,
-  type GetScratchpadArgs,
-  type AppendScratchpadArgs,
-  type ListScratchpadsArgs,
-  type SearchScratchpadsArgs,
 } from './tools/index.js';
+import {
+  validateCreateWorkflowArgs,
+  validateCreateScratchpadArgs,
+  validateGetScratchpadArgs,
+  validateAppendScratchpadArgs,
+  validateListScratchpadsArgs,
+  validateSearchScratchpadsArgs,
+  handleToolError,
+  createToolResponse,
+} from './server-helpers.js';
 
 class ScratchpadMCPServer {
   private server: Server;
@@ -73,89 +77,52 @@ class ScratchpadMCPServer {
 
       try {
         switch (name) {
-          case 'create-workflow':
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify(await createWorkflow(args as unknown as CreateWorkflowArgs), null, 2),
-                },
-              ],
-            };
+          case 'create-workflow': {
+            const validatedArgs = validateCreateWorkflowArgs(args);
+            const result = await createWorkflow(validatedArgs);
+            return createToolResponse(result);
+          }
 
-          case 'list-workflows':
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify(await listWorkflows({}), null, 2),
-                },
-              ],
-            };
+          case 'list-workflows': {
+            const result = await listWorkflows({});
+            return createToolResponse(result);
+          }
 
-          case 'create-scratchpad':
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify(await createScratchpad(args as unknown as CreateScratchpadArgs), null, 2),
-                },
-              ],
-            };
+          case 'create-scratchpad': {
+            const validatedArgs = validateCreateScratchpadArgs(args);
+            const result = await createScratchpad(validatedArgs);
+            return createToolResponse(result);
+          }
 
-          case 'get-scratchpad':
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify(await getScratchpad(args as unknown as GetScratchpadArgs), null, 2),
-                },
-              ],
-            };
+          case 'get-scratchpad': {
+            const validatedArgs = validateGetScratchpadArgs(args);
+            const result = await getScratchpad(validatedArgs);
+            return createToolResponse(result);
+          }
 
-          case 'append-scratchpad':
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify(await appendScratchpad(args as unknown as AppendScratchpadArgs), null, 2),
-                },
-              ],
-            };
+          case 'append-scratchpad': {
+            const validatedArgs = validateAppendScratchpadArgs(args);
+            const result = await appendScratchpad(validatedArgs);
+            return createToolResponse(result);
+          }
 
-          case 'list-scratchpads':
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify(await listScratchpads(args as unknown as ListScratchpadsArgs), null, 2),
-                },
-              ],
-            };
+          case 'list-scratchpads': {
+            const validatedArgs = validateListScratchpadsArgs(args);
+            const result = await listScratchpads(validatedArgs);
+            return createToolResponse(result);
+          }
 
-          case 'search-scratchpads':
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify(await searchScratchpads(args as unknown as SearchScratchpadsArgs), null, 2),
-                },
-              ],
-            };
+          case 'search-scratchpads': {
+            const validatedArgs = validateSearchScratchpadsArgs(args);
+            const result = await searchScratchpads(validatedArgs);
+            return createToolResponse(result);
+          }
 
           default:
             throw new Error(`Unknown tool: ${name}`);
         }
       } catch (error) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-            },
-          ],
-          isError: true,
-        };
+        return handleToolError(error, name);
       }
     });
   }
