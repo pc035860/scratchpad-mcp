@@ -10,6 +10,8 @@ import type {
   ListScratchpadsArgs,
   SearchScratchpadsArgs,
   UpdateWorkflowStatusArgs,
+  ListWorkflowsArgs,
+  GetLatestActiveWorkflowArgs,
 } from './tools/index.js';
 
 /**
@@ -33,6 +35,13 @@ export function validateCreateWorkflowArgs(args: unknown): CreateWorkflowArgs {
   
   if (typeof obj['description'] === 'string') {
     result.description = obj['description'];
+  }
+  
+  if (obj['project_scope'] !== undefined) {
+    if (typeof obj['project_scope'] !== 'string') {
+      throw new Error('Invalid arguments: project_scope must be a string');
+    }
+    result.project_scope = obj['project_scope'];
   }
   
   return result;
@@ -218,4 +227,46 @@ export function validateUpdateWorkflowStatusArgs(args: unknown): UpdateWorkflowS
     workflow_id: obj['workflow_id'],
     is_active: obj['is_active'],
   };
+}
+
+/**
+ * Validate ListWorkflowsArgs
+ */
+export function validateListWorkflowsArgs(args: unknown): ListWorkflowsArgs {
+  if (!args || typeof args !== 'object') {
+    throw new Error('Invalid arguments: expected object');
+  }
+
+  const obj = args as Record<string, unknown>;
+  const result: ListWorkflowsArgs = {};
+  
+  if (obj['project_scope'] !== undefined) {
+    if (typeof obj['project_scope'] !== 'string') {
+      throw new Error('Invalid arguments: project_scope must be a string');
+    }
+    result.project_scope = obj['project_scope'];
+  }
+  
+  return result;
+}
+
+/**
+ * Validate GetLatestActiveWorkflowArgs
+ */
+export function validateGetLatestActiveWorkflowArgs(args: unknown): GetLatestActiveWorkflowArgs {
+  if (!args || typeof args !== 'object') {
+    throw new Error('Invalid arguments: expected object');
+  }
+
+  const obj = args as Record<string, unknown>;
+  const result: GetLatestActiveWorkflowArgs = {};
+  
+  if (obj['project_scope'] !== undefined) {
+    if (typeof obj['project_scope'] !== 'string') {
+      throw new Error('Invalid arguments: project_scope must be a string');
+    }
+    result.project_scope = obj['project_scope'];
+  }
+  
+  return result;
 }

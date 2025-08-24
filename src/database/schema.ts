@@ -3,13 +3,13 @@
  */
 import type Database from 'better-sqlite3';
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export const initializeSchema = (db: Database.Database): void => {
   // Enable foreign key support
   db.pragma('foreign_keys = ON');
   
-  // Create workflows table
+  // Create workflows table with all fields including project_scope
   db.exec(`
     CREATE TABLE IF NOT EXISTS workflows (
       id TEXT PRIMARY KEY,
@@ -18,7 +18,8 @@ export const initializeSchema = (db: Database.Database): void => {
       created_at INTEGER NOT NULL DEFAULT (unixepoch()),
       updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
       scratchpad_count INTEGER NOT NULL DEFAULT 0,
-      is_active BOOLEAN NOT NULL DEFAULT 1
+      is_active BOOLEAN NOT NULL DEFAULT 1,
+      project_scope TEXT DEFAULT NULL
     )
   `);
 
@@ -53,6 +54,12 @@ export const initializeSchema = (db: Database.Database): void => {
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_workflows_updated_at 
     ON workflows(updated_at DESC)
+  `);
+
+  // Add index for project_scope filtering
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_workflows_project_scope 
+    ON workflows(project_scope)
   `);
 
   // Initialize FTS5 virtual table for full-text search
@@ -155,6 +162,28 @@ export const migrateSchema = (db: Database.Database): void => {
       }
     } catch (error) {
       console.error('Failed to migrate schema to v2:', error);
+      throw error;
+    }
+  }
+
+  // Migration from v2 to v3: Add project_scope column
+  if (currentVersion < 3) {
+    console.log('Migrating database schema from v2 to v3...');
+    try {
+      // Check if column already exists
+      const tableInfo = db.prepare(`PRAGMA table_info(workflows)`).all() as Array<{ name: string }>;
+      const hasProjectScope = tableInfo.some(column => column.name === 'project_scope');
+      
+      if (!hasProjectScope) {
+        db.exec(`ALTER TABLE workflows ADD COLUMN project_scope TEXT DEFAULT NULL`);
+        console.log('✅ Added project_scope column to workflows table');
+        
+        // Create index for project_scope
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_workflows_project_scope ON workflows(project_scope)`);
+        console.log('✅ Created index for project_scope column');
+      }
+    } catch (error) {
+      console.error('Failed to migrate schema to v3:', error);
       throw error;
     }
   }

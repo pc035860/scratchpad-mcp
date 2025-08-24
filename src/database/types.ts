@@ -10,6 +10,19 @@ export interface Workflow {
   updated_at: number;
   scratchpad_count: number;
   is_active: boolean;
+  project_scope: string | null;
+}
+
+// Database representation of workflow (is_active as number 0/1)
+export interface WorkflowDbRow {
+  id: string;
+  name: string;
+  description: string | null;
+  created_at: number;
+  updated_at: number;
+  scratchpad_count: number;
+  is_active: number; // SQLite stores boolean as 0/1
+  project_scope: string | null;
 }
 
 export interface Scratchpad {
@@ -38,6 +51,7 @@ export interface DatabaseConfig {
 export interface CreateWorkflowParams {
   name: string;
   description?: string | undefined;
+  project_scope?: string | undefined;
 }
 
 export interface CreateScratchpadParams {

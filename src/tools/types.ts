@@ -9,6 +9,7 @@ export interface ToolHandler<TArgs = Record<string, unknown>, TResult = unknown>
 export interface CreateWorkflowArgs {
   name: string;
   description?: string;
+  project_scope?: string;
 }
 
 export interface CreateWorkflowResult {
@@ -20,8 +21,13 @@ export interface CreateWorkflowResult {
     updated_at: string; // ISO string
     scratchpad_count: number;
     is_active: boolean;
+    project_scope: string | null;
   };
   message: string;
+}
+
+export interface ListWorkflowsArgs {
+  project_scope?: string;
 }
 
 export interface ListWorkflowsResult {
@@ -33,6 +39,7 @@ export interface ListWorkflowsResult {
     updated_at: string; // ISO string
     scratchpad_count: number;
     is_active: boolean;
+    project_scope: string | null;
   }>;
   count: number;
 }
@@ -142,6 +149,10 @@ export interface SearchScratchpadsResult {
 }
 
 // New tool types for is_active feature
+export interface GetLatestActiveWorkflowArgs {
+  project_scope?: string;
+}
+
 export interface GetLatestActiveWorkflowResult {
   workflow: {
     id: string;
@@ -151,6 +162,7 @@ export interface GetLatestActiveWorkflowResult {
     updated_at: string; // ISO string
     scratchpad_count: number;
     is_active: boolean;
+    project_scope: string | null;
   } | null;
   message: string;
 }
@@ -169,6 +181,7 @@ export interface UpdateWorkflowStatusResult {
     updated_at: string; // ISO string
     scratchpad_count: number;
     is_active: boolean;
+    project_scope: string | null;
   };
   message: string;
   previous_status: boolean;

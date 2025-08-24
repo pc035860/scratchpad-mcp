@@ -12,6 +12,7 @@ import {
 } from './schema.js';
 import type {
   Workflow,
+  WorkflowDbRow,
   Scratchpad,
   SearchResult,
   DatabaseConfig,
@@ -73,8 +74,8 @@ export class ScratchpadDatabase {
   private prepareStatements(): void {
     // Workflow statements
     this.insertWorkflow = this.db.prepare(`
-      INSERT INTO workflows (id, name, description, created_at, updated_at, scratchpad_count, is_active)
-      VALUES (?, ?, ?, unixepoch(), unixepoch(), 0, 1)
+      INSERT INTO workflows (id, name, description, created_at, updated_at, scratchpad_count, is_active, project_scope)
+      VALUES (?, ?, ?, unixepoch(), unixepoch(), 0, 1, ?)
     `);
 
     this.getWorkflow = this.db.prepare(`
@@ -139,7 +140,7 @@ export class ScratchpadDatabase {
           s.id, s.workflow_id, s.title, s.content, s.created_at, s.updated_at, s.size_bytes,
           w.id as w_id, w.name as w_name, w.description as w_description, 
           w.created_at as w_created_at, w.updated_at as w_updated_at, 
-          w.scratchpad_count as w_scratchpad_count, w.is_active as w_is_active,
+          w.scratchpad_count as w_scratchpad_count, w.is_active as w_is_active, w.project_scope as w_project_scope,
           fts.rank
         FROM scratchpads_fts fts
         JOIN scratchpads s ON s.rowid = fts.rowid
@@ -156,7 +157,7 @@ export class ScratchpadDatabase {
         s.id, s.workflow_id, s.title, s.content, s.created_at, s.updated_at, s.size_bytes,
         w.id as w_id, w.name as w_name, w.description as w_description, 
         w.created_at as w_created_at, w.updated_at as w_updated_at, 
-        w.scratchpad_count as w_scratchpad_count, w.is_active as w_is_active,
+        w.scratchpad_count as w_scratchpad_count, w.is_active as w_is_active, w.project_scope as w_project_scope,
         1.0 as rank
       FROM scratchpads s
       JOIN workflows w ON s.workflow_id = w.id
@@ -202,7 +203,7 @@ export class ScratchpadDatabase {
   private updateWorkflowActiveStatusStmt!: Database.Statement<[number, string]>;
 
   // Statement properties
-  private insertWorkflow!: Database.Statement<[string, string, string | null]>;
+  private insertWorkflow!: Database.Statement<[string, string, string | null, string | null]>;
   private getWorkflow!: Database.Statement<[string]>;
   private listWorkflows!: Database.Statement<[]>;
   private updateWorkflowTimestamp!: Database.Statement<[string]>;
@@ -222,7 +223,7 @@ export class ScratchpadDatabase {
     const id = randomUUID();
     const now = Math.floor(Date.now() / 1000);
 
-    this.insertWorkflow.run(id, params.name, params.description ?? null);
+    this.insertWorkflow.run(id, params.name, params.description ?? null, params.project_scope ?? null);
 
     return {
       id,
@@ -232,6 +233,7 @@ export class ScratchpadDatabase {
       updated_at: now,
       scratchpad_count: 0,
       is_active: true,
+      project_scope: params.project_scope ?? null,
     };
   }
 
@@ -239,7 +241,7 @@ export class ScratchpadDatabase {
    * Get workflow by ID
    */
   getWorkflowById(id: string): Workflow | null {
-    const result = this.getWorkflow.get(id) as (Workflow & { is_active: number }) | undefined;
+    const result = this.getWorkflow.get(id) as WorkflowDbRow | undefined;
     if (!result) {
       return null;
     }
@@ -252,8 +254,22 @@ export class ScratchpadDatabase {
   /**
    * List all workflows
    */
-  getWorkflows(): Workflow[] {
-    const results = this.listWorkflows.all() as (Workflow & { is_active: number })[];
+  getWorkflows(projectScope?: string): Workflow[] {
+    let results: WorkflowDbRow[];
+    
+    if (projectScope) {
+      // Use project-specific query
+      const scopedStmt = this.db.prepare(`
+        SELECT * FROM workflows 
+        WHERE project_scope = ?
+        ORDER BY updated_at DESC
+      `);
+      results = scopedStmt.all(projectScope) as WorkflowDbRow[];
+    } else {
+      // Use the existing global query
+      results = this.listWorkflows.all() as WorkflowDbRow[];
+    }
+    
     return results.map(result => ({
       ...result,
       is_active: Boolean(result.is_active),
@@ -263,8 +279,23 @@ export class ScratchpadDatabase {
   /**
    * Get the latest active workflow
    */
-  getLatestActiveWorkflow(): Workflow | null {
-    const result = this.getLatestActiveWorkflowStmt.get() as (Workflow & { is_active: number }) | undefined;
+  getLatestActiveWorkflow(projectScope?: string): Workflow | null {
+    let result: WorkflowDbRow | undefined;
+    
+    if (projectScope) {
+      // Use project-specific query
+      const scopedStmt = this.db.prepare(`
+        SELECT * FROM workflows 
+        WHERE is_active = 1 AND project_scope = ?
+        ORDER BY updated_at DESC 
+        LIMIT 1
+      `);
+      result = scopedStmt.get(projectScope) as WorkflowDbRow | undefined;
+    } else {
+      // Use the existing global query
+      result = this.getLatestActiveWorkflowStmt.get() as WorkflowDbRow | undefined;
+    }
+    
     if (!result) {
       return null;
     }
@@ -443,7 +474,7 @@ export class ScratchpadDatabase {
           limit
         ) as Array<{ 
           id: string; workflow_id: string; title: string; content: string; created_at: number; updated_at: number; size_bytes: number;
-          w_id: string; w_name: string; w_description: string | null; w_created_at: number; w_updated_at: number; w_scratchpad_count: number; w_is_active: number;
+          w_id: string; w_name: string; w_description: string | null; w_created_at: number; w_updated_at: number; w_scratchpad_count: number; w_is_active: number; w_project_scope: string | null;
           rank: number;
         }>;
 
@@ -465,6 +496,7 @@ export class ScratchpadDatabase {
             updated_at: row.w_updated_at,
             scratchpad_count: row.w_scratchpad_count,
             is_active: Boolean(row.w_is_active),
+            project_scope: row.w_project_scope,
           },
           rank: row.rank,
         }));
@@ -484,7 +516,7 @@ export class ScratchpadDatabase {
       limit
     ) as Array<{ 
       id: string; workflow_id: string; title: string; content: string; created_at: number; updated_at: number; size_bytes: number;
-      w_id: string; w_name: string; w_description: string | null; w_created_at: number; w_updated_at: number; w_scratchpad_count: number; w_is_active: number;
+      w_id: string; w_name: string; w_description: string | null; w_created_at: number; w_updated_at: number; w_scratchpad_count: number; w_is_active: number; w_project_scope: string | null;
       rank: number;
     }>;
 
@@ -506,6 +538,7 @@ export class ScratchpadDatabase {
         updated_at: row.w_updated_at,
         scratchpad_count: row.w_scratchpad_count,
         is_active: Boolean(row.w_is_active),
+        project_scope: row.w_project_scope,
       },
       rank: row.rank,
     }));

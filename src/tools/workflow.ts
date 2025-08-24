@@ -6,7 +6,9 @@ import type {
   ToolHandler,
   CreateWorkflowArgs,
   CreateWorkflowResult,
+  ListWorkflowsArgs,
   ListWorkflowsResult,
+  GetLatestActiveWorkflowArgs,
   GetLatestActiveWorkflowResult,
   UpdateWorkflowStatusArgs,
   UpdateWorkflowStatusResult,
@@ -37,11 +39,12 @@ export const createWorkflowTool = (db: ScratchpadDatabase): ToolHandler<CreateWo
       const workflow = db.createWorkflow({
         name: args.name,
         description: args.description ?? undefined,
+        project_scope: args.project_scope ?? undefined,
       });
 
       return {
         workflow: formatWorkflow(workflow),
-        message: `Created workflow "${workflow.name}" with ID ${workflow.id}`,
+        message: `Created workflow "${workflow.name}" with ID ${workflow.id}${args.project_scope ? ` (scope: ${args.project_scope})` : ''}`,
       };
     } catch (error) {
       throw new Error(`Failed to create workflow: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -52,10 +55,10 @@ export const createWorkflowTool = (db: ScratchpadDatabase): ToolHandler<CreateWo
 /**
  * List all workflows
  */
-export const listWorkflowsTool = (db: ScratchpadDatabase): ToolHandler<Record<string, never>, ListWorkflowsResult> => {
-  return async (): Promise<ListWorkflowsResult> => {
+export const listWorkflowsTool = (db: ScratchpadDatabase): ToolHandler<ListWorkflowsArgs, ListWorkflowsResult> => {
+  return async (args: ListWorkflowsArgs): Promise<ListWorkflowsResult> => {
     try {
-      const workflows = db.getWorkflows();
+      const workflows = db.getWorkflows(args.project_scope);
 
       return {
         workflows: workflows.map(formatWorkflow),
@@ -70,20 +73,22 @@ export const listWorkflowsTool = (db: ScratchpadDatabase): ToolHandler<Record<st
 /**
  * Get the latest active workflow
  */
-export const getLatestActiveWorkflowTool = (db: ScratchpadDatabase): ToolHandler<Record<string, never>, GetLatestActiveWorkflowResult> => {
-  return async (): Promise<GetLatestActiveWorkflowResult> => {
+export const getLatestActiveWorkflowTool = (db: ScratchpadDatabase): ToolHandler<GetLatestActiveWorkflowArgs, GetLatestActiveWorkflowResult> => {
+  return async (args: GetLatestActiveWorkflowArgs): Promise<GetLatestActiveWorkflowResult> => {
     try {
-      const workflow = db.getLatestActiveWorkflow();
+      const workflow = db.getLatestActiveWorkflow(args.project_scope);
 
       if (workflow) {
+        const scopeMessage = args.project_scope ? ` (scope: ${args.project_scope})` : '';
         return {
           workflow: formatWorkflow(workflow),
-          message: `Found latest active workflow: "${workflow.name}" (${workflow.id})`,
+          message: `Found latest active workflow: "${workflow.name}" (${workflow.id})${scopeMessage}`,
         };
       } else {
+        const scopeMessage = args.project_scope ? ` in scope "${args.project_scope}"` : '';
         return {
           workflow: null,
-          message: 'No active workflow found',
+          message: `No active workflow found${scopeMessage}`,
         };
       }
     } catch (error) {

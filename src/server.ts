@@ -27,6 +27,8 @@ import {
   validateListScratchpadsArgs,
   validateSearchScratchpadsArgs,
   validateUpdateWorkflowStatusArgs,
+  validateListWorkflowsArgs,
+  validateGetLatestActiveWorkflowArgs,
   handleToolError,
   createToolResponse,
 } from './server-helpers.js';
@@ -89,12 +91,14 @@ class ScratchpadMCPServer {
           }
 
           case 'list-workflows': {
-            const result = await listWorkflows({});
+            const validatedArgs = validateListWorkflowsArgs(args);
+            const result = await listWorkflows(validatedArgs);
             return createToolResponse(result);
           }
 
           case 'get-latest-active-workflow': {
-            const result = await getLatestActiveWorkflow({});
+            const validatedArgs = validateGetLatestActiveWorkflowArgs(args);
+            const result = await getLatestActiveWorkflow(validatedArgs);
             return createToolResponse(result);
           }
 
@@ -161,6 +165,10 @@ class ScratchpadMCPServer {
                   type: 'string',
                   description: 'Optional description of the workflow',
                 },
+                project_scope: {
+                  type: 'string',
+                  description: 'Optional project scope to isolate workflows by project',
+                },
               },
               required: ['name'],
             },
@@ -170,7 +178,12 @@ class ScratchpadMCPServer {
             description: 'List all available workflows',
             inputSchema: {
               type: 'object',
-              properties: {},
+              properties: {
+                project_scope: {
+                  type: 'string',
+                  description: 'Optional project scope to filter workflows by project',
+                },
+              },
             },
           },
           {
@@ -178,7 +191,12 @@ class ScratchpadMCPServer {
             description: 'Get the most recently updated active workflow',
             inputSchema: {
               type: 'object',
-              properties: {},
+              properties: {
+                project_scope: {
+                  type: 'string',
+                  description: 'Optional project scope to filter workflows by project',
+                },
+              },
             },
           },
           {
