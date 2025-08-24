@@ -73,8 +73,8 @@ export class ScratchpadDatabase {
   private prepareStatements(): void {
     // Workflow statements
     this.insertWorkflow = this.db.prepare(`
-      INSERT INTO workflows (id, name, description, created_at, updated_at, scratchpad_count)
-      VALUES (?, ?, ?, unixepoch(), unixepoch(), 0)
+      INSERT INTO workflows (id, name, description, created_at, updated_at, scratchpad_count, is_active)
+      VALUES (?, ?, ?, unixepoch(), unixepoch(), 0, 1)
     `);
 
     this.getWorkflow = this.db.prepare(`
@@ -91,6 +91,18 @@ export class ScratchpadDatabase {
 
     this.incrementScratchpadCount = this.db.prepare(`
       UPDATE workflows SET scratchpad_count = scratchpad_count + 1 WHERE id = ?
+    `);
+
+    // New workflow statements for is_active support
+    this.getLatestActiveWorkflowStmt = this.db.prepare(`
+      SELECT * FROM workflows 
+      WHERE is_active = 1 
+      ORDER BY updated_at DESC 
+      LIMIT 1
+    `);
+
+    this.updateWorkflowActiveStatusStmt = this.db.prepare(`
+      UPDATE workflows SET is_active = ?, updated_at = unixepoch() WHERE id = ?
     `);
 
     // Scratchpad statements
@@ -124,9 +136,10 @@ export class ScratchpadDatabase {
     if (this.hasFTS5) {
       this.searchScratchpadsFTS = this.db.prepare(`
         SELECT 
-          s.*,
-          w.name as workflow_name,
-          w.description as workflow_description,
+          s.id, s.workflow_id, s.title, s.content, s.created_at, s.updated_at, s.size_bytes,
+          w.id as w_id, w.name as w_name, w.description as w_description, 
+          w.created_at as w_created_at, w.updated_at as w_updated_at, 
+          w.scratchpad_count as w_scratchpad_count, w.is_active as w_is_active,
           fts.rank
         FROM scratchpads_fts fts
         JOIN scratchpads s ON s.rowid = fts.rowid
@@ -140,9 +153,10 @@ export class ScratchpadDatabase {
 
     this.searchScratchpadsLike = this.db.prepare(`
       SELECT 
-        s.*,
-        w.name as workflow_name,
-        w.description as workflow_description,
+        s.id, s.workflow_id, s.title, s.content, s.created_at, s.updated_at, s.size_bytes,
+        w.id as w_id, w.name as w_name, w.description as w_description, 
+        w.created_at as w_created_at, w.updated_at as w_updated_at, 
+        w.scratchpad_count as w_scratchpad_count, w.is_active as w_is_active,
         1.0 as rank
       FROM scratchpads s
       JOIN workflows w ON s.workflow_id = w.id
@@ -153,15 +167,7 @@ export class ScratchpadDatabase {
     `);
   }
 
-  /**
-   * 轉義 FTS5 搜尋中的特殊字符
-   * 處理連字號、雙引號、括號等可能導致語法錯誤的字符
-   */
-  private sanitizeFTS5Query(query: string): string {
-    // 轉義 FTS5 特殊字符：- " ( ) : * 
-    const escaped = query.replace(/[-"():*]/g, '\\$&');
-    return escaped;
-  }
+  // Note: sanitizeFTS5Query was removed as it's not used - buildFTS5Query handles escaping
 
   /**
    * 構建安全的 FTS5 搜尋查詢
@@ -190,6 +196,10 @@ export class ScratchpadDatabase {
       return false;
     }
   }
+
+  // New workflow-related statements
+  private getLatestActiveWorkflowStmt!: Database.Statement<[]>;
+  private updateWorkflowActiveStatusStmt!: Database.Statement<[boolean, string]>;
 
   // Statement properties
   private insertWorkflow!: Database.Statement<[string, string, string | null]>;
@@ -221,6 +231,7 @@ export class ScratchpadDatabase {
       created_at: now,
       updated_at: now,
       scratchpad_count: 0,
+      is_active: true,
     };
   }
 
@@ -228,15 +239,53 @@ export class ScratchpadDatabase {
    * Get workflow by ID
    */
   getWorkflowById(id: string): Workflow | null {
-    const result = this.getWorkflow.get(id) as Workflow | undefined;
-    return result ?? null;
+    const result = this.getWorkflow.get(id) as (Workflow & { is_active: number }) | undefined;
+    if (!result) {
+      return null;
+    }
+    return {
+      ...result,
+      is_active: Boolean(result.is_active),
+    };
   }
 
   /**
    * List all workflows
    */
   getWorkflows(): Workflow[] {
-    return this.listWorkflows.all() as Workflow[];
+    const results = this.listWorkflows.all() as (Workflow & { is_active: number })[];
+    return results.map(result => ({
+      ...result,
+      is_active: Boolean(result.is_active),
+    }));
+  }
+
+  /**
+   * Get the latest active workflow
+   */
+  getLatestActiveWorkflow(): Workflow | null {
+    const result = this.getLatestActiveWorkflowStmt.get() as (Workflow & { is_active: number }) | undefined;
+    if (!result) {
+      return null;
+    }
+    return {
+      ...result,
+      is_active: Boolean(result.is_active),
+    };
+  }
+
+  /**
+   * Update workflow active status
+   */
+  setWorkflowActiveStatus(id: string, isActive: boolean): Workflow | null {
+    const existing = this.getWorkflowById(id);
+    if (!existing) {
+      throw new Error(`Workflow not found: ${id}`);
+    }
+
+    this.updateWorkflowActiveStatusStmt.run(isActive, id);
+    
+    return this.getWorkflowById(id);
   }
 
   /**
@@ -247,6 +296,11 @@ export class ScratchpadDatabase {
     const workflow = this.getWorkflowById(params.workflow_id);
     if (!workflow) {
       throw new Error(`Workflow not found: ${params.workflow_id}`);
+    }
+
+    // Check if workflow is active
+    if (!workflow.is_active) {
+      throw new Error(`Cannot create scratchpad: workflow is not active: ${params.workflow_id}`);
     }
 
     // Check size limit
@@ -309,6 +363,12 @@ export class ScratchpadDatabase {
     const existing = this.getScratchpadById(params.id);
     if (!existing) {
       throw new Error(`Scratchpad not found: ${params.id}`);
+    }
+
+    // Check if the workflow is active
+    const workflow = this.getWorkflowById(existing.workflow_id);
+    if (!workflow || !workflow.is_active) {
+      throw new Error(`Cannot append to scratchpad: workflow is not active: ${existing.workflow_id}`);
     }
 
     const newContent = existing.content + params.content;
@@ -381,7 +441,11 @@ export class ScratchpadDatabase {
           params.workflow_id ?? null,
           params.workflow_id ?? null,
           limit
-        ) as Array<Scratchpad & { workflow_name: string; workflow_description?: string; rank: number }>;
+        ) as Array<{ 
+          id: string; workflow_id: string; title: string; content: string; created_at: number; updated_at: number; size_bytes: number;
+          w_id: string; w_name: string; w_description: string | null; w_created_at: number; w_updated_at: number; w_scratchpad_count: number; w_is_active: number;
+          rank: number;
+        }>;
 
         return results.map((row) => ({
           scratchpad: {
@@ -394,12 +458,13 @@ export class ScratchpadDatabase {
             size_bytes: row.size_bytes,
           },
           workflow: {
-            id: row.workflow_id,
-            name: row.workflow_name,
-            description: row.workflow_description ?? null,
-            created_at: 0, // Not needed for search results
-            updated_at: 0,
-            scratchpad_count: 0,
+            id: row.w_id,
+            name: row.w_name,
+            description: row.w_description,
+            created_at: row.w_created_at,
+            updated_at: row.w_updated_at,
+            scratchpad_count: row.w_scratchpad_count,
+            is_active: Boolean(row.w_is_active),
           },
           rank: row.rank,
         }));
@@ -417,7 +482,11 @@ export class ScratchpadDatabase {
       params.workflow_id ?? null,
       params.workflow_id ?? null,
       limit
-    ) as Array<Scratchpad & { workflow_name: string; workflow_description?: string; rank: number }>;
+    ) as Array<{ 
+      id: string; workflow_id: string; title: string; content: string; created_at: number; updated_at: number; size_bytes: number;
+      w_id: string; w_name: string; w_description: string | null; w_created_at: number; w_updated_at: number; w_scratchpad_count: number; w_is_active: number;
+      rank: number;
+    }>;
 
     return results.map((row) => ({
       scratchpad: {
@@ -430,12 +499,13 @@ export class ScratchpadDatabase {
         size_bytes: row.size_bytes,
       },
       workflow: {
-        id: row.workflow_id,
-        name: row.workflow_name,
-        description: row.workflow_description ?? null,
-        created_at: 0,
-        updated_at: 0,
-        scratchpad_count: 0,
+        id: row.w_id,
+        name: row.w_name,
+        description: row.w_description,
+        created_at: row.w_created_at,
+        updated_at: row.w_updated_at,
+        scratchpad_count: row.w_scratchpad_count,
+        is_active: Boolean(row.w_is_active),
       },
       rank: row.rank,
     }));
@@ -499,9 +569,9 @@ export class ScratchpadDatabase {
       totalScratchpads: scratchpadCount.count,
       hasFTS5: this.hasFTS5,
       walMode: isWalMode,
-      walSize,
+      ...(walSize !== undefined && { walSize }),
       ftsIndexHealth,
-      lastCheckpoint,
+      ...(lastCheckpoint !== undefined && { lastCheckpoint }),
     };
   }
 

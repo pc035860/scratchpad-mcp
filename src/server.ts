@@ -11,6 +11,8 @@ import { ScratchpadDatabase } from './database/index.js';
 import {
   createWorkflowTool,
   listWorkflowsTool,
+  getLatestActiveWorkflowTool,
+  updateWorkflowStatusTool,
   createScratchpadTool,
   getScratchpadTool,
   appendScratchpadTool,
@@ -24,6 +26,7 @@ import {
   validateAppendScratchpadArgs,
   validateListScratchpadsArgs,
   validateSearchScratchpadsArgs,
+  validateUpdateWorkflowStatusArgs,
   handleToolError,
   createToolResponse,
 } from './server-helpers.js';
@@ -61,6 +64,8 @@ class ScratchpadMCPServer {
     // Workflow management tools
     const createWorkflow = createWorkflowTool(this.db);
     const listWorkflows = listWorkflowsTool(this.db);
+    const getLatestActiveWorkflow = getLatestActiveWorkflowTool(this.db);
+    const updateWorkflowStatus = updateWorkflowStatusTool(this.db);
 
     // Scratchpad CRUD tools
     const createScratchpad = createScratchpadTool(this.db);
@@ -85,6 +90,17 @@ class ScratchpadMCPServer {
 
           case 'list-workflows': {
             const result = await listWorkflows({});
+            return createToolResponse(result);
+          }
+
+          case 'get-latest-active-workflow': {
+            const result = await getLatestActiveWorkflow({});
+            return createToolResponse(result);
+          }
+
+          case 'update-workflow-status': {
+            const validatedArgs = validateUpdateWorkflowStatusArgs(args);
+            const result = await updateWorkflowStatus(validatedArgs);
             return createToolResponse(result);
           }
 
@@ -155,6 +171,32 @@ class ScratchpadMCPServer {
             inputSchema: {
               type: 'object',
               properties: {},
+            },
+          },
+          {
+            name: 'get-latest-active-workflow',
+            description: 'Get the most recently updated active workflow',
+            inputSchema: {
+              type: 'object',
+              properties: {},
+            },
+          },
+          {
+            name: 'update-workflow-status',
+            description: 'Activate or deactivate a workflow. Only active workflows can have scratchpads created or modified.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                workflow_id: {
+                  type: 'string',
+                  description: 'ID of the workflow to update',
+                },
+                is_active: {
+                  type: 'boolean',
+                  description: 'Set to true to activate, false to deactivate the workflow',
+                },
+              },
+              required: ['workflow_id', 'is_active'],
             },
           },
           {

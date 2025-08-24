@@ -9,6 +9,22 @@ import type {
 } from './types.js';
 
 /**
+ * Convert Unix timestamp to local timezone ISO string
+ */
+const formatTimestamp = (unixTimestamp: number): string => {
+  return new Date(unixTimestamp * 1000).toISOString();
+};
+
+/**
+ * Format scratchpad object with ISO timestamp strings
+ */
+const formatScratchpad = (scratchpad: any) => ({
+  ...scratchpad,
+  created_at: formatTimestamp(scratchpad.created_at),
+  updated_at: formatTimestamp(scratchpad.updated_at),
+});
+
+/**
  * Search scratchpads using FTS5 or LIKE fallback
  */
 export const searchScratchpadsTool = (db: ScratchpadDatabase): ToolHandler<SearchScratchpadsArgs, SearchScratchpadsResult> => {
@@ -31,7 +47,7 @@ export const searchScratchpadsTool = (db: ScratchpadDatabase): ToolHandler<Searc
         const snippet = generateSnippet(result.scratchpad.content, args.query, 150);
         
         return {
-          scratchpad: result.scratchpad,
+          scratchpad: formatScratchpad(result.scratchpad),
           workflow: {
             id: result.workflow.id,
             name: result.workflow.name,

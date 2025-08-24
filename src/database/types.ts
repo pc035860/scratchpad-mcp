@@ -9,6 +9,7 @@ export interface Workflow {
   created_at: number;
   updated_at: number;
   scratchpad_count: number;
+  is_active: boolean;
 }
 
 export interface Scratchpad {

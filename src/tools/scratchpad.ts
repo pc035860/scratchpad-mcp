@@ -15,6 +15,22 @@ import type {
 } from './types.js';
 
 /**
+ * Convert Unix timestamp to local timezone ISO string
+ */
+const formatTimestamp = (unixTimestamp: number): string => {
+  return new Date(unixTimestamp * 1000).toISOString();
+};
+
+/**
+ * Format scratchpad object with ISO timestamp strings
+ */
+const formatScratchpad = (scratchpad: any) => ({
+  ...scratchpad,
+  created_at: formatTimestamp(scratchpad.created_at),
+  updated_at: formatTimestamp(scratchpad.updated_at),
+});
+
+/**
  * Create a new scratchpad
  */
 export const createScratchpadTool = (db: ScratchpadDatabase): ToolHandler<CreateScratchpadArgs, CreateScratchpadResult> => {
@@ -27,7 +43,7 @@ export const createScratchpadTool = (db: ScratchpadDatabase): ToolHandler<Create
       });
 
       return {
-        scratchpad,
+        scratchpad: formatScratchpad(scratchpad),
         message: `Created scratchpad "${scratchpad.title}" (${scratchpad.size_bytes} bytes) in workflow ${scratchpad.workflow_id}`,
       };
     } catch (error) {
@@ -45,7 +61,7 @@ export const getScratchpadTool = (db: ScratchpadDatabase): ToolHandler<GetScratc
       const scratchpad = db.getScratchpadById(args.id);
 
       return {
-        scratchpad,
+        scratchpad: scratchpad ? formatScratchpad(scratchpad) : null,
       };
     } catch (error) {
       throw new Error(`Failed to get scratchpad: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -72,7 +88,7 @@ export const appendScratchpadTool = (db: ScratchpadDatabase): ToolHandler<Append
       const appendedBytes = updatedScratchpad.size_bytes - originalScratchpad.size_bytes;
 
       return {
-        scratchpad: updatedScratchpad,
+        scratchpad: formatScratchpad(updatedScratchpad),
         message: `Appended ${appendedBytes} bytes to scratchpad "${updatedScratchpad.title}" (total: ${updatedScratchpad.size_bytes} bytes)`,
         appended_bytes: appendedBytes,
       };
@@ -101,7 +117,7 @@ export const listScratchpadsTool = (db: ScratchpadDatabase): ToolHandler<ListScr
       const resultScratchpads = hasMore ? scratchpads.slice(0, limit) : scratchpads;
 
       return {
-        scratchpads: resultScratchpads,
+        scratchpads: resultScratchpads.map(formatScratchpad),
         count: resultScratchpads.length,
         has_more: hasMore,
       };

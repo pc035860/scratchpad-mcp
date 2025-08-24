@@ -9,6 +9,7 @@ import type {
   AppendScratchpadArgs,
   ListScratchpadsArgs,
   SearchScratchpadsArgs,
+  UpdateWorkflowStatusArgs,
 } from './tools/index.js';
 
 /**
@@ -192,5 +193,29 @@ export function createToolResponse(result: unknown): { content: Array<{ type: 't
         text: JSON.stringify(result, null, 2),
       },
     ],
+  };
+}
+
+/**
+ * Validate UpdateWorkflowStatusArgs
+ */
+export function validateUpdateWorkflowStatusArgs(args: unknown): UpdateWorkflowStatusArgs {
+  if (!args || typeof args !== 'object') {
+    throw new Error('Invalid arguments: expected object');
+  }
+
+  const obj = args as Record<string, unknown>;
+  
+  if (typeof obj['workflow_id'] !== 'string') {
+    throw new Error('Invalid arguments: workflow_id must be a string');
+  }
+  
+  if (typeof obj['is_active'] !== 'boolean') {
+    throw new Error('Invalid arguments: is_active must be a boolean');
+  }
+  
+  return {
+    workflow_id: obj['workflow_id'],
+    is_active: obj['is_active'],
   };
 }

@@ -3,7 +3,7 @@
  */
 import type Database from 'better-sqlite3';
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export const initializeSchema = (db: Database.Database): void => {
   // Enable foreign key support
@@ -17,9 +17,13 @@ export const initializeSchema = (db: Database.Database): void => {
       description TEXT,
       created_at INTEGER NOT NULL DEFAULT (unixepoch()),
       updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
-      scratchpad_count INTEGER NOT NULL DEFAULT 0
+      scratchpad_count INTEGER NOT NULL DEFAULT 0,
+      is_active BOOLEAN NOT NULL DEFAULT 1
     )
   `);
+
+  // Handle schema migration from v1 to v2
+  migrateSchema(db);
 
   // Create scratchpads table
   db.exec(`
@@ -115,6 +119,45 @@ export const initializeSchema = (db: Database.Database): void => {
     INSERT OR REPLACE INTO schema_info (key, value) VALUES (?, ?)
   `);
   insertVersion.run('version', SCHEMA_VERSION.toString());
+};
+
+/**
+ * Handle schema migrations
+ */
+export const migrateSchema = (db: Database.Database): void => {
+  let currentVersion = 1;
+  
+  try {
+    const getVersion = db.prepare(`
+      SELECT value FROM schema_info WHERE key = ?
+    `);
+    const result = getVersion.get('version') as { value: string } | undefined;
+    
+    if (result) {
+      currentVersion = parseInt(result.value, 10);
+    }
+  } catch {
+    // schema_info table doesn't exist, this is a new database
+    return;
+  }
+
+  // Migration from v1 to v2: Add is_active column
+  if (currentVersion < 2) {
+    console.log('Migrating database schema from v1 to v2...');
+    try {
+      // Check if column already exists
+      const tableInfo = db.prepare(`PRAGMA table_info(workflows)`).all() as Array<{ name: string }>;
+      const hasIsActive = tableInfo.some(column => column.name === 'is_active');
+      
+      if (!hasIsActive) {
+        db.exec(`ALTER TABLE workflows ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT 1`);
+        console.log('✅ Added is_active column to workflows table');
+      }
+    } catch (error) {
+      console.error('Failed to migrate schema to v2:', error);
+      throw error;
+    }
+  }
 };
 
 export const checkSchemaVersion = (db: Database.Database): boolean => {

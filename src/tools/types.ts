@@ -16,9 +16,10 @@ export interface CreateWorkflowResult {
     id: string;
     name: string;
     description: string | null;
-    created_at: number;
-    updated_at: number;
+    created_at: string; // ISO string
+    updated_at: string; // ISO string
     scratchpad_count: number;
+    is_active: boolean;
   };
   message: string;
 }
@@ -28,9 +29,10 @@ export interface ListWorkflowsResult {
     id: string;
     name: string;
     description: string | null;
-    created_at: number;
-    updated_at: number;
+    created_at: string; // ISO string
+    updated_at: string; // ISO string
     scratchpad_count: number;
+    is_active: boolean;
   }>;
   count: number;
 }
@@ -47,8 +49,8 @@ export interface CreateScratchpadResult {
     workflow_id: string;
     title: string;
     content: string;
-    created_at: number;
-    updated_at: number;
+    created_at: string; // ISO string
+    updated_at: string; // ISO string
     size_bytes: number;
   };
   message: string;
@@ -64,8 +66,8 @@ export interface GetScratchpadResult {
     workflow_id: string;
     title: string;
     content: string;
-    created_at: number;
-    updated_at: number;
+    created_at: string; // ISO string
+    updated_at: string; // ISO string
     size_bytes: number;
   } | null;
 }
@@ -81,8 +83,8 @@ export interface AppendScratchpadResult {
     workflow_id: string;
     title: string;
     content: string;
-    created_at: number;
-    updated_at: number;
+    created_at: string; // ISO string
+    updated_at: string; // ISO string
     size_bytes: number;
   };
   message: string;
@@ -101,8 +103,8 @@ export interface ListScratchpadsResult {
     workflow_id: string;
     title: string;
     content: string;
-    created_at: number;
-    updated_at: number;
+    created_at: string; // ISO string
+    updated_at: string; // ISO string
     size_bytes: number;
   }>;
   count: number;
@@ -122,8 +124,8 @@ export interface SearchScratchpadsResult {
       workflow_id: string;
       title: string;
       content: string;
-      created_at: number;
-      updated_at: number;
+      created_at: string; // ISO string
+      updated_at: string; // ISO string
       size_bytes: number;
     };
     workflow: {
@@ -137,4 +139,37 @@ export interface SearchScratchpadsResult {
   count: number;
   query: string;
   search_method: 'fts5' | 'like';
+}
+
+// New tool types for is_active feature
+export interface GetLatestActiveWorkflowResult {
+  workflow: {
+    id: string;
+    name: string;
+    description: string | null;
+    created_at: string; // ISO string
+    updated_at: string; // ISO string
+    scratchpad_count: number;
+    is_active: boolean;
+  } | null;
+  message: string;
+}
+
+export interface UpdateWorkflowStatusArgs {
+  workflow_id: string;
+  is_active: boolean;
+}
+
+export interface UpdateWorkflowStatusResult {
+  workflow: {
+    id: string;
+    name: string;
+    description: string | null;
+    created_at: string; // ISO string
+    updated_at: string; // ISO string
+    scratchpad_count: number;
+    is_active: boolean;
+  };
+  message: string;
+  previous_status: boolean;
 }

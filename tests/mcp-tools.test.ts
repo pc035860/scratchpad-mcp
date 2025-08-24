@@ -91,7 +91,7 @@ class MCPToolsTestHelper {
     }
   }
   
-  async callListScratchpads(args: ListScratchpadsArgs = {}) {
+  async callListScratchpads(args: ListScratchpadsArgs) {
     try {
       return await this.listScratchpads(args);
     } catch (error) {
@@ -349,8 +349,10 @@ describe('MCP Tools Integration Tests', () => {
         expect(getResult).not.toHaveProperty('error');
         expect(getResult.scratchpad.content).toBe('Initial content\nAppended content');
         
-        // Verify updated_at changed (allow for same timestamp in fast tests)
-        expect(appendResult.scratchpad.updated_at).toBeGreaterThanOrEqual(appendResult.scratchpad.created_at);
+        // Verify updated_at changed (allow for same timestamp in fast tests) - now comparing ISO strings
+        const updatedAt = new Date(appendResult.scratchpad.updated_at).getTime();
+        const createdAt = new Date(appendResult.scratchpad.created_at).getTime();
+        expect(updatedAt).toBeGreaterThanOrEqual(createdAt);
       });
 
       it('should handle invalid scratchpad id', async () => {
@@ -477,14 +479,16 @@ describe('MCP Tools Integration Tests', () => {
         expect(result.count).toBe(0);
       });
 
-      it('should handle list without workflow_id filter', async () => {
-        const result = await helper.callListScratchpads({});
+      it('should handle list with workflow_id', async () => {
+        const result = await helper.callListScratchpads({
+          workflow_id: workflowId,
+        });
         
         expect(result).not.toHaveProperty('error');
         expect(result).toHaveProperty('scratchpads');
         expect(result).toHaveProperty('count');
         expect(result.count).toBe(result.scratchpads.length);
-        // Note: might be empty in isolated test runs
+        // Should return the scratchpads created in this test
       });
     });
 
