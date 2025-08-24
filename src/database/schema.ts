@@ -86,12 +86,12 @@ export const initializeSchema = (db: Database.Database): void => {
         END
       `);
 
+      // 使用 INSERT OR REPLACE 觸發器確保 FTS5 索引同步，與 WAL 模式完全相容
       db.exec(`
         CREATE TRIGGER IF NOT EXISTS scratchpads_fts_update 
         AFTER UPDATE ON scratchpads 
         BEGIN
-          DELETE FROM scratchpads_fts WHERE rowid = OLD.rowid;
-          INSERT INTO scratchpads_fts(rowid, id, workflow_id, title, content) 
+          INSERT OR REPLACE INTO scratchpads_fts(rowid, id, workflow_id, title, content) 
           VALUES (NEW.rowid, NEW.id, NEW.workflow_id, NEW.title, NEW.content);
         END
       `);
@@ -149,6 +149,66 @@ export const hasFTS5Support = (db: Database.Database): boolean => {
     db.exec('DROP TABLE fts_test');
     return true;
   } catch {
+    return false;
+  }
+};
+
+/**
+ * 重建 FTS5 索引
+ * 在資料庫修復或索引損壞時使用
+ */
+export const rebuildFTS5Index = (db: Database.Database): boolean => {
+  if (!hasFTS5Support(db)) {
+    console.warn('FTS5 不支援，跳過索引重建');
+    return false;
+  }
+
+  try {
+    // 檢查 FTS5 表是否存在
+    const tableExists = db.prepare(`
+      SELECT name FROM sqlite_master 
+      WHERE type='table' AND name='scratchpads_fts'
+    `).get();
+
+    if (tableExists) {
+      console.log('重建 FTS5 索引...');
+      db.exec(`INSERT INTO scratchpads_fts(scratchpads_fts) VALUES('rebuild')`);
+      console.log('✅ FTS5 索引重建完成');
+      return true;
+    } else {
+      console.warn('FTS5 表不存在，無法重建索引');
+      return false;
+    }
+  } catch (error) {
+    console.error('FTS5 索引重建失敗:', error);
+    return false;
+  }
+};
+
+/**
+ * 驗證 FTS5 索引健康狀態
+ */
+export const validateFTS5Index = (db: Database.Database): boolean => {
+  if (!hasFTS5Support(db)) {
+    return false;
+  }
+
+  try {
+    // 檢查主表和 FTS5 表的記錄數量是否一致
+    const scratchpadCount = db.prepare('SELECT COUNT(*) as count FROM scratchpads').get() as { count: number };
+    const ftsCount = db.prepare('SELECT COUNT(*) as count FROM scratchpads_fts').get() as { count: number };
+
+    const isHealthy = scratchpadCount.count === ftsCount.count;
+    
+    if (!isHealthy) {
+      console.warn(`FTS5 索引不一致: 主表 ${scratchpadCount.count} 記錄, FTS5 表 ${ftsCount.count} 記錄`);
+      // 自動重建索引
+      return rebuildFTS5Index(db);
+    }
+
+    return true;
+  } catch (error) {
+    console.error('FTS5 索引驗證失敗:', error);
     return false;
   }
 };

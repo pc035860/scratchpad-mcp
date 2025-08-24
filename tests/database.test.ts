@@ -130,6 +130,49 @@ describe('ScratchpadDatabase', () => {
       const programmingResults = db.searchScratchpads({ query: 'programming' });
       expect(programmingResults).toHaveLength(2);
     });
+
+    it('should handle hyphenated search terms correctly', () => {
+      const workflow = db.createWorkflow({ name: 'Test Workflow' });
+      
+      // 測試連字號搜尋 - 這是錯誤1的修復測試
+      db.createScratchpad({
+        workflow_id: workflow.id,
+        title: 'Claude-MD 專案筆記',
+        content: 'This project uses Claude-MD configuration system',
+      });
+      
+      db.createScratchpad({
+        workflow_id: workflow.id,
+        title: 'Regular Notes',
+        content: 'This is a regular note without special characters',
+      });
+
+      // 測試帶連字號的搜尋（之前會導致 "no such column: MD" 錯誤）
+      const hyphenResults = db.searchScratchpads({ query: 'Claude-MD' });
+      expect(hyphenResults).toHaveLength(1);
+      expect(hyphenResults[0]?.scratchpad.title).toBe('Claude-MD 專案筆記');
+    });
+
+    it('should handle special characters in search queries', () => {
+      const workflow = db.createWorkflow({ name: 'Test Workflow' });
+      
+      // 測試各種特殊字符的搜尋
+      db.createScratchpad({
+        workflow_id: workflow.id,
+        title: 'Special Chars: "quotes" (parentheses) *asterisks*',
+        content: 'Content with various special characters',
+      });
+
+      // 這些搜尋之前可能會導致 FTS5 語法錯誤
+      const quoteResults = db.searchScratchpads({ query: '"quotes"' });
+      expect(quoteResults.length).toBeGreaterThanOrEqual(0); // 至少不應該報錯
+
+      const parenResults = db.searchScratchpads({ query: '(parentheses)' });
+      expect(parenResults.length).toBeGreaterThanOrEqual(0);
+
+      const asteriskResults = db.searchScratchpads({ query: '*asterisks*' });
+      expect(asteriskResults.length).toBeGreaterThanOrEqual(0);
+    });
   });
 
   describe('Error Handling', () => {
@@ -154,6 +197,96 @@ describe('ScratchpadDatabase', () => {
           content: largeContent,
         });
       }).toThrow('Scratchpad content too large');
+    });
+
+    it('should throw error for non-existent scratchpad append', () => {
+      expect(() => {
+        db.appendToScratchpad({
+          id: 'non-existent-id',
+          content: 'Additional content',
+        });
+      }).toThrow('Scratchpad not found');
+    });
+  });
+
+  describe('Append Operation Stability', () => {
+    it('should successfully append content multiple times', () => {
+      const workflow = db.createWorkflow({ name: 'Test Workflow' });
+      const scratchpad = db.createScratchpad({
+        workflow_id: workflow.id,
+        title: 'Append Test',
+        content: 'Initial content',
+      });
+
+      // 多次 append 操作，測試穩定性（錯誤2的修復驗證）
+      const append1 = db.appendToScratchpad({
+        id: scratchpad.id,
+        content: '\nFirst append',
+      });
+      expect(append1.content).toBe('Initial content\nFirst append');
+
+      const append2 = db.appendToScratchpad({
+        id: append1.id,
+        content: '\nSecond append',
+      });
+      expect(append2.content).toBe('Initial content\nFirst append\nSecond append');
+
+      const append3 = db.appendToScratchpad({
+        id: append2.id,
+        content: '\nThird append',
+      });
+      expect(append3.content).toBe('Initial content\nFirst append\nSecond append\nThird append');
+      
+      // 驗證更新時間有正確遞增
+      expect(append3.updated_at).toBeGreaterThanOrEqual(append2.updated_at);
+      expect(append2.updated_at).toBeGreaterThanOrEqual(append1.updated_at);
+    });
+
+    it('should handle append with special characters', () => {
+      const workflow = db.createWorkflow({ name: 'Test Workflow' });
+      const scratchpad = db.createScratchpad({
+        workflow_id: workflow.id,
+        title: 'Special Chars Test',
+        content: 'Initial content',
+      });
+
+      // 測試包含特殊字符的 append（這些字符之前可能導致 FTS5 問題）
+      const updated = db.appendToScratchpad({
+        id: scratchpad.id,
+        content: '\n\n## 🌸 Hanabi 的測試\n這是一個包含特殊字符的測試：Claude-MD、"引號"、(括號)、*星號*',
+      });
+
+      expect(updated.content).toContain('🌸 Hanabi');
+      expect(updated.content).toContain('Claude-MD');
+      expect(updated.content).toContain('"引號"');
+      expect(updated.content).toContain('(括號)');
+      expect(updated.content).toContain('*星號*');
+    });
+
+    it('should maintain searchability after append operations', () => {
+      const workflow = db.createWorkflow({ name: 'Test Workflow' });
+      const scratchpad = db.createScratchpad({
+        workflow_id: workflow.id,
+        title: 'Search Test',
+        content: 'Original searchable content',
+      });
+
+      // Append 後應該仍然可以搜尋到
+      db.appendToScratchpad({
+        id: scratchpad.id,
+        content: '\nAdded Claude-MD configuration',
+      });
+
+      // 測試搜尋原始內容
+      const originalResults = db.searchScratchpads({ query: 'searchable' });
+      expect(originalResults).toHaveLength(1);
+      expect(originalResults[0]?.scratchpad.id).toBe(scratchpad.id);
+
+      // 測試搜尋新增的內容（包含連字號）
+      const appendedResults = db.searchScratchpads({ query: 'Claude-MD' });
+      expect(appendedResults).toHaveLength(1);
+      expect(appendedResults[0]?.scratchpad.id).toBe(scratchpad.id);
+      expect(appendedResults[0]?.scratchpad.content).toContain('Claude-MD');
     });
   });
 
