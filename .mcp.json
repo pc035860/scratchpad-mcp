@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "serena": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/oraios/serena@v0.1.4",
+        "serena-mcp-server",
+        "--context",
+        "ide-assistant",
+        "--project",
+        "/Users/pc035860/code/scratchpad-mcp-v2",
+        "--mode",
+        "planning"
+      ],
+      "env": {}
+    }
+  }
+}
