@@ -61,6 +61,114 @@ npm run dev
 export SCRATCHPAD_DB_PATH="./my-scratchpad.db"
 ```
 
+## 🔗 Claude Code Integration
+
+### Prerequisites
+
+- Node.js 18.0.0 or higher
+- Claude Code CLI installed and configured
+
+### Method 1: CLI Installation (Recommended)
+
+```bash
+# Build the project first
+npm run build
+
+# Install to local scope (personal use)
+claude mcp add scratchpad-mcp-v2 -- node ./dist/server.js
+
+# Or install to project scope (team sharing)
+claude mcp add scratchpad-mcp-v2 --scope project -- node ./dist/server.js
+```
+
+### Method 2: Manual Configuration
+
+Create or edit your MCP configuration file:
+
+**Project-level configuration**: Project root `.mcp.json` (recommended)
+```json
+{
+  "mcpServers": {
+    "scratchpad-mcp-v2": {
+      "command": "node",
+      "args": ["./dist/server.js"],
+      "env": {
+        "SCRATCHPAD_DB_PATH": "./scratchpad.db"
+      }
+    }
+  }
+}
+```
+
+### Verification
+
+```bash
+# Check MCP server status
+claude mcp list
+
+# View server details
+claude mcp get scratchpad-mcp-v2
+
+# Restart Claude Code to apply configuration
+```
+
+### Available MCP Tools
+
+Once installed, Claude Code can use these 7 MCP tools:
+
+- `create-workflow` - Create new workflow containers
+- `list-workflows` - List all available workflows  
+- `create-scratchpad` - Create scratchpads within workflows
+- `get-scratchpad` - Retrieve scratchpad content
+- `append-scratchpad` - Append content to existing scratchpads
+- `list-scratchpads` - List scratchpads in a workflow
+- `search-scratchpads` - Full-text search across scratchpad content
+
+### Usage Example
+
+```typescript
+// Typical workflow in Claude Code
+const workflow = await mcp.callTool('create-workflow', {
+  name: 'AI Research Project',
+  description: 'Collaborative research notes and findings'
+});
+
+const scratchpad = await mcp.callTool('create-scratchpad', {
+  workflow_id: workflow.id,
+  title: 'Model Architecture Notes',
+  content: 'Initial transformer research findings...'
+});
+
+const results = await mcp.callTool('search-scratchpads', {
+  query: 'transformer architecture',
+  limit: 10
+});
+```
+
+### Troubleshooting
+
+**Issue: MCP server won't start**
+- Check Node.js version is 18+
+- Ensure project is built correctly: `npm run build`
+- Verify file paths and permissions
+
+**Issue: Configuration file invalid**
+- Validate JSON syntax using a JSON validator
+- Confirm configuration file location is correct
+- Restart Claude Code after configuration changes
+
+**Issue: Tools not available**
+- Use `claude mcp list` to check server status
+- Ensure server is running and responding
+- Verify Claude Code has reloaded the configuration
+
+### Best Practices
+
+- **Recommended approach**: Use CLI installation (`claude mcp add`) for simplicity
+- **Team collaboration**: Include `.mcp.json` in version control for shared setups
+- **Cross-project tools**: Install with `--scope user` flag for global availability
+- **Security**: Regularly review and update MCP server configurations
+
 ## 🛠️ MCP Tools API
 
 ### Workflow Management
