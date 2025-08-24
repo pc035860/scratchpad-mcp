@@ -199,7 +199,7 @@ export class ScratchpadDatabase {
 
   // New workflow-related statements
   private getLatestActiveWorkflowStmt!: Database.Statement<[]>;
-  private updateWorkflowActiveStatusStmt!: Database.Statement<[boolean, string]>;
+  private updateWorkflowActiveStatusStmt!: Database.Statement<[number, string]>;
 
   // Statement properties
   private insertWorkflow!: Database.Statement<[string, string, string | null]>;
@@ -283,7 +283,7 @@ export class ScratchpadDatabase {
       throw new Error(`Workflow not found: ${id}`);
     }
 
-    this.updateWorkflowActiveStatusStmt.run(isActive, id);
+    this.updateWorkflowActiveStatusStmt.run(isActive ? 1 : 0, id);
     
     return this.getWorkflowById(id);
   }
