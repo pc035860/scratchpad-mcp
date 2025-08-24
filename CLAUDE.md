@@ -1,178 +1,130 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with this repository.
 
 ## Project Overview
 
-This project's name is `scratchpad-mcp-v2` - use this for the graph-memory system.
+**Name**: `scratchpad-mcp-v2` - use this for the graph-memory system.
 
 **Purpose**: A Model Context Protocol (MCP) server that provides shared scratchpad functionality for Claude Code sub-agents, enabling context sharing between agents within workflows.
 
-**Current Status**: ~85% complete - core functionality implemented, integration testing needed.
+**Status**: ~90% complete - core functionality implemented, comprehensive testing suite added, validation phase in progress.
 
-## Architecture
+**Tech Stack**: TypeScript + Node.js 18+, SQLite with FTS5, MCP SDK, ESM modules
 
-### Core Components
-- **Database Layer**: SQLite with FTS5 full-text search (`src/database/`)
-  - `ScratchpadDatabase.ts` - Core database operations
-  - `schema.ts` - Table definitions and FTS5 configuration
-  - `types.ts` - Database type definitions
-- **MCP Tools**: 6 core tools (`src/tools/`)
-  - Workflow management: `create-workflow`
-  - Scratchpad CRUD: `create-scratchpad`, `get-scratchpad`, `append-scratchpad`
-  - Search and listing: `list-scratchpads`, `search-scratchpads`
-- **MCP Server**: Main entry point (`src/server.ts`)
+## Quick Start
 
-### Key Technical Decisions
-- **ESM modules**: Uses ES modules, not CommonJS
-- **TypeScript strict mode**: Full type safety with strict configuration
-- **SQLite WAL mode**: Write-Ahead Logging for better performance
-- **FTS5 conditional**: Full-text search disabled in test environment to avoid virtual table issues
-
-## Development Commands
-
-### Building and Development
+### First-time Setup
 ```bash
+# Install and verify
+npm install && npm test && npm run build
+
 # Development with hot reload
 npm run dev
-
-# Build for production (outputs to dist/)
-npm run build
-
-# Clean build artifacts
-npm run clean
 ```
 
-### Testing
+### Running as MCP Server
 ```bash
-# Run all tests
-npm test
+# Development mode
+npm run dev
 
-# Run tests in watch mode
-npm run test:watch
-
-# Database tests (currently implemented)
-npm test -- tests/database.test.ts
+# Production mode  
+npm run build && ./dist/server.js
 ```
 
-### Code Quality
+## Common Commands
+
+### Development Workflow
 ```bash
-# Type checking
-npm run typecheck
+# Start development
+npm run dev                    # Hot reload development
 
-# Linting
-npm run lint
-npm run lint:fix
+# Code quality checks
+npm run typecheck             # TypeScript validation  
+npm run lint                  # ESLint checking
+npm run format                # Prettier formatting
 
-# Formatting
-npm run format
+# Testing
+npm test                      # Run all tests
+npm run test:watch           # Watch mode testing
+npm test -- tests/database.test.ts  # Specific test file
 ```
 
-## Project Structure
+### Build and Deploy
+```bash
+npm run build                 # Build to dist/
+npm run clean                 # Clean build artifacts
+./dist/server.js             # Run built MCP server
+```
 
+## Architecture & Key Components
+
+### Core Structure
 ```
 src/
-├── server.ts                    # MCP server entry point
+├── server.ts                 # MCP server entry point
+├── server-helpers.ts         # Parameter validation & error handling
 ├── database/
-│   ├── ScratchpadDatabase.ts    # Core database class
-│   ├── schema.ts                # SQL schema and FTS5 setup
-│   ├── types.ts                 # Database type definitions
-│   └── index.ts                 # Database exports
-└── tools/
-    ├── workflow.ts              # Workflow management tools
-    ├── scratchpad.ts            # Scratchpad CRUD tools
-    ├── search.ts                # Search and listing tools
-    ├── types.ts                 # Tool type definitions
-    └── index.ts                 # Tool exports
-
-tests/
-└── database.test.ts             # Database layer tests (9/9 passing)
+│   ├── ScratchpadDatabase.ts # Core database operations
+│   ├── schema.ts            # SQLite schema + FTS5 setup
+│   └── types.ts             # Database type definitions
+└── tools/                   # 7 MCP tools for workflow management
+    ├── workflow.ts          # create-workflow  
+    ├── scratchpad.ts        # create/get/append/delete scratchpad
+    └── search.ts            # list/search scratchpads
 ```
 
-## Key Design Patterns
+### Key Components
+- **Database**: SQLite with FTS5 full-text search, WAL mode for performance
+- **MCP Tools**: 7 tools for workflow and scratchpad management
+- **Server Helpers**: Type-safe parameter validation for all MCP operations
 
 ### Data Model
-- **Workflows**: Top-level containers for organizing scratchpads
-- **Scratchpads**: Content storage with full-text search capabilities
-- **Size Limits**: 1MB per scratchpad, 50 scratchpads per workflow
+- **Workflows**: Top-level containers (organize scratchpads)
+- **Scratchpads**: Content storage with full-text search (1MB limit, 50 per workflow)
 
-### Error Handling
-- Comprehensive parameter validation for all MCP tools
-- Graceful fallback from FTS5 to LIKE search if needed
-- Type-safe error responses following MCP protocol
+## Development Notes
 
-### Performance Features
-- FTS5 full-text search indexing
-- SQLite WAL mode for concurrent access
-- In-memory caching for frequently accessed data
+### Important Technical Details
+- **ESM Modules**: Uses ES modules, not CommonJS
+- **TypeScript Strict**: Full type safety enabled
+- **FTS5 Conditional**: Disabled in test env, fallback to LIKE search if needed
+- **SQLite WAL**: Write-Ahead Logging for better concurrent performance
 
-## Running the MCP Server
+### MCP Protocol Integration
+This server implements MCP for inter-agent communication via stdio. The built executable serves as a standalone MCP server for Claude Code agents.
 
-The built server (`dist/server.js`) is executable and designed to run as an MCP server:
-
-```bash
-# After building
-./dist/server.js
-
-# Or via npm
-npm run build && node dist/server.js
-```
-
-## Current Development Status
-
-✅ **Completed**:
-- Full database layer implementation with tests
-- All 6 MCP tools implemented
-- TypeScript configuration and build system
-- Core functionality working
-
-⏳ **In Progress/Needed**:
-- Integration tests for MCP tools (high priority)
-- Performance testing for FTS5 search (<100ms target)
-- End-to-end MCP protocol testing
-
-## Testing Strategy
-
-### Database Layer
-- Located in `tests/database.test.ts`
-- All 9 tests passing
-- Covers CRUD operations, search, and error handling
-
-### Integration Testing (Needed)
-- MCP tool parameter validation
-- Full workflow scenarios
-- Error condition handling
-
-### Performance Testing (Needed)
-- FTS5 search response time validation
-- Large data volume testing (1MB scratchpads)
-- Concurrent access testing
-
-## Important Notes
-
-### FTS5 Configuration
-- FTS5 is conditionally enabled (disabled in test environment)
-- Production deployments should verify SQLite FTS5 support
-- Fallback to LIKE search available if FTS5 fails
-
-### TypeScript Configuration
-- Strict mode enabled with comprehensive type coverage
-- ESM module system
-- Node.js 18+ target
+**Tool Categories**:
+1. **Workflow Management**: Creating and organizing work contexts
+2. **Content Management**: CRUD operations on scratchpads  
+3. **Search & Discovery**: Finding content across workflows
 
 ### Development Tools
-- **Build**: tsup (zero-config, fast builds)
-- **Test**: Vitest (fast, TypeScript-native)
-- **Lint**: ESLint with TypeScript rules
+- **Build**: tsup (zero-config builds)
+- **Test**: Vitest (TypeScript-native)
+- **Lint**: ESLint + TypeScript rules
 - **Format**: Prettier
 
-## MCP Protocol Integration
+### Performance Targets
+- Search Response: <100ms (FTS5 full-text search)
+- Content Storage: 1MB max per scratchpad
+- Concurrent Operations: Thread-safe database operations
 
-This server implements the Model Context Protocol for inter-agent communication. The built executable serves as a standalone MCP server that Claude Code agents can interact with via stdio communication.
+### Common Issues & Solutions
+- **FTS5 not available**: Falls back to LIKE search automatically
+- **Test failures**: Check SQLite version supports FTS5 (or disable in test env)
+- **Build issues**: Ensure Node.js 18+ and clean build with `npm run clean`
 
-### Tool Categories
-1. **Workflow Management**: Creating and organizing work contexts
-2. **Content Management**: CRUD operations on scratchpads
-3. **Search & Discovery**: Finding relevant content across workflows
+## Testing
 
-Each tool follows MCP protocol standards with proper parameter validation and error handling.
+```bash
+# All tests (database: 9/9 passing)
+npm test
+
+# Specific test suites
+npm test -- tests/database.test.ts      # Database layer
+npm test -- tests/mcp-tools.test.ts     # MCP integration  
+npm test -- tests/performance.test.ts   # Performance benchmarks
+```
+
+**Test Coverage**: Database layer, MCP tools integration, performance benchmarks, protocol compliance.
