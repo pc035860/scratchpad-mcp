@@ -41,3 +41,10 @@ logs/
 
 .mcp.json
 .serena
+
+# SQLite WAL files
+*.db-wal
+*.db-shm
+
+# Optional Chinese tokenizer extensions
+extensions/

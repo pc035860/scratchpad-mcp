@@ -61,6 +61,67 @@ npm run dev
 export SCRATCHPAD_DB_PATH="./my-scratchpad.db"
 ```
 
+## 🇨🇳 Chinese Text Search Support (Optional)
+
+For enhanced Chinese word segmentation and Pinyin search, you can install the `wangfenjin/simple` SQLite extension:
+
+### Installation
+
+1. **Create extensions directory:**
+   ```bash
+   mkdir extensions
+   ```
+
+2. **Download the extension for your platform:**
+   
+   **macOS:**
+   ```bash
+   # Download libsimple.dylib
+   curl -L "https://github.com/wangfenjin/simple/releases/download/v0.5.2/libsimple.dylib" \
+        -o extensions/libsimple.dylib
+   
+   # Download dictionary files
+   curl -L "https://github.com/wangfenjin/simple/releases/download/v0.5.2/dict.tar.gz" \
+        | tar -xz -C extensions/
+   ```
+   
+   **Linux:**
+   ```bash
+   # Download libsimple.so
+   curl -L "https://github.com/wangfenjin/simple/releases/download/v0.5.2/libsimple.so" \
+        -o extensions/libsimple.so
+   
+   # Download dictionary files  
+   curl -L "https://github.com/wangfenjin/simple/releases/download/v0.5.2/dict.tar.gz" \
+        | tar -xz -C extensions/
+   ```
+
+3. **Or use the installation script:**
+   ```bash
+   # Run the automated installation script
+   chmod +x scripts/install-chinese-support.sh
+   ./scripts/install-chinese-support.sh
+   ```
+
+4. **Verify installation:**
+   ```bash
+   # Check if files are in place
+   ls -la extensions/
+   # Should show: libsimple.dylib (or .so) and dict/ directory
+   ```
+
+### Features
+- **Chinese word segmentation**: Improved search accuracy for Chinese text
+- **Pinyin search**: Search Chinese content using Pinyin (e.g., "zhoujielun" → "周杰倫")
+- **Automatic fallback**: Falls back to standard FTS5 search if extension not available
+- **Multi-tier search**: simple tokenizer → standard FTS5 → LIKE search
+
+### Notes
+- The extension is completely optional - the server works without it
+- If the extension fails to load, search will automatically fall back to standard FTS5
+- Dictionary files (~2MB) improve segmentation accuracy for Chinese text
+- Supports both simplified and traditional Chinese characters
+
 ## 🔗 Claude Code Integration
 
 ### Prerequisites

@@ -3,6 +3,12 @@
  */
 import Database from 'better-sqlite3';
 import { randomUUID } from 'crypto';
+import * as path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 import {
   initializeSchema,
   checkSchemaVersion,
@@ -26,8 +32,33 @@ import type {
 export class ScratchpadDatabase {
   private db: Database.Database;
   private hasFTS5: boolean = false;
+  private hasSimpleTokenizer = false; // Simple 中文分詞擴展可用性
   private readonly MAX_SCRATCHPAD_SIZE = 1024 * 1024; // 1MB
   private readonly MAX_SCRATCHPADS_PER_WORKFLOW = 50;
+
+  /**
+   * 嘗試載入 Simple 中文分詞擴展
+   */
+  private loadSimpleTokenizer(): void {
+    try {
+      // 尋找 Simple 擴展檔案路徑（處理 .ts 和 .js 編譯差異）
+      const extensionPath = path.resolve(__dirname, '../../extensions/libsimple');
+      
+      // 嘗試載入擴展
+      this.db.loadExtension(extensionPath);
+      
+      // 測試 simple 函數是否可用
+      const testResult = this.db.prepare("SELECT simple_query('test') as result").get() as { result: string };
+      
+      if (testResult?.result) {
+        this.hasSimpleTokenizer = true;
+        console.log('✅ Simple 中文分詞擴展載入成功');
+      }
+    } catch (error) {
+      console.warn('⚠️ Simple 擴展載入失敗，將使用預設 tokenizer:', error instanceof Error ? error.message : error);
+      this.hasSimpleTokenizer = false;
+    }
+  }
 
   constructor(config: DatabaseConfig) {
     this.db = new Database(config.filename, {
@@ -46,12 +77,16 @@ export class ScratchpadDatabase {
     this.db.pragma('wal_autocheckpoint = 1000');  // 每 1000 頁自動 checkpoint
     this.db.pragma('wal_checkpoint(PASSIVE)');    // 啟動時執行被動 checkpoint
 
+    // 嘗試載入 Simple 中文分詞擴展
+    this.loadSimpleTokenizer();
+
     // Check for FTS5 support
     this.hasFTS5 = hasFTS5Support(this.db);
 
     // Initialize schema if needed
     if (!checkSchemaVersion(this.db)) {
-      initializeSchema(this.db);
+      const tokenizer = this.hasSimpleTokenizer ? 'simple' : 'porter unicode61';
+      initializeSchema(this.db, tokenizer);
     }
 
     // Validate and rebuild FTS5 index if necessary
@@ -175,6 +210,14 @@ export class ScratchpadDatabase {
    * 使用欄位限定搜尋避免語法錯誤
    */
   private buildFTS5Query(query: string): string {
+    // 如果有 simple 擴展，使用 simple_query() 函數進行智能查詢
+    if (this.hasSimpleTokenizer) {
+      // 轉義單引號以防止 SQL 注入
+      const escaped = query.replace(/'/g, "''");
+      return `simple_query('${escaped}')`;
+    }
+    
+    // 降級到基本 FTS5 查詢
     const escaped = query.replace(/"/g, '""'); // 轉義雙引號
     // 在 title 和 content 欄位中搜尋，避免將特殊字符解析為欄位分隔符
     return `title:"${escaped}" OR content:"${escaped}"`;
@@ -190,10 +233,22 @@ export class ScratchpadDatabase {
     try {
       // 嘗試簡單的 FTS5 操作
       this.db.prepare('SELECT COUNT(*) FROM scratchpads_fts LIMIT 1').get();
+      
+      // 如果使用 simple tokenizer，也要檢查 simple 函數
+      if (this.hasSimpleTokenizer) {
+        try {
+          this.db.prepare("SELECT simple_query('test') as result").get();
+        } catch (simpleError) {
+          console.warn('⚠️ Simple 擴展函數測試失敗，降級到基本 FTS5:', simpleError);
+          this.hasSimpleTokenizer = false;
+        }
+      }
+      
       return true;
     } catch (error) {
       console.warn('FTS5 健康檢查失敗，切換到 LIKE 搜尋:', error);
       this.hasFTS5 = false;
+      this.hasSimpleTokenizer = false;
       return false;
     }
   }
@@ -463,20 +518,56 @@ export class ScratchpadDatabase {
     const limit = Math.min(params.limit ?? 20, 50);
 
     // 檢查 FTS5 健康狀態並嘗試使用 FTS5 搜尋
-    if (this.checkFTS5Health() && this.searchScratchpadsFTS) {
+    if (this.checkFTS5Health()) {
       try {
-        // 使用安全的 FTS5 查詢語法
-        const safeQuery = this.buildFTS5Query(params.query);
-        const results = this.searchScratchpadsFTS.all(
-          safeQuery,
-          params.workflow_id ?? null,
-          params.workflow_id ?? null,
-          limit
-        ) as Array<{ 
+        let results: Array<{ 
           id: string; workflow_id: string; title: string; content: string; created_at: number; updated_at: number; size_bytes: number;
           w_id: string; w_name: string; w_description: string | null; w_created_at: number; w_updated_at: number; w_scratchpad_count: number; w_is_active: number; w_project_scope: string | null;
           rank: number;
         }>;
+
+        if (this.hasSimpleTokenizer) {
+          // 使用 simple_query() 函數 - 需要動態構建 SQL
+          const escapedQuery = params.query.replace(/'/g, "''");
+          const workflowFilter = params.workflow_id ? `AND s.workflow_id = '${params.workflow_id.replace(/'/g, "''")}'` : '';
+          
+          const dynamicSql = `
+            SELECT 
+              s.id, s.workflow_id, s.title, s.content, s.created_at, s.updated_at, s.size_bytes,
+              w.id as w_id, w.name as w_name, w.description as w_description, 
+              w.created_at as w_created_at, w.updated_at as w_updated_at, 
+              w.scratchpad_count as w_scratchpad_count, w.is_active as w_is_active, w.project_scope as w_project_scope,
+              fts.rank
+            FROM scratchpads_fts fts
+            JOIN scratchpads s ON s.rowid = fts.rowid
+            JOIN workflows w ON s.workflow_id = w.id
+            WHERE scratchpads_fts MATCH simple_query('${escapedQuery}')
+            ${workflowFilter}
+            ORDER BY fts.rank
+            LIMIT ${limit}
+          `;
+          
+          results = this.db.prepare(dynamicSql).all() as Array<{
+            id: string; workflow_id: string; title: string; content: string; created_at: number; updated_at: number; size_bytes: number;
+            w_id: string; w_name: string; w_description: string | null; w_created_at: number; w_updated_at: number; w_scratchpad_count: number; w_is_active: number; w_project_scope: string | null;
+            rank: number;
+          }>;
+        } else if (this.searchScratchpadsFTS) {
+          // 使用標準 FTS5 查詢
+          const safeQuery = this.buildFTS5Query(params.query);
+          results = this.searchScratchpadsFTS.all(
+            safeQuery,
+            params.workflow_id ?? null,
+            params.workflow_id ?? null,
+            limit
+          ) as Array<{ 
+            id: string; workflow_id: string; title: string; content: string; created_at: number; updated_at: number; size_bytes: number;
+            w_id: string; w_name: string; w_description: string | null; w_created_at: number; w_updated_at: number; w_scratchpad_count: number; w_is_active: number; w_project_scope: string | null;
+            rank: number;
+          }>;
+        } else {
+          throw new Error('No FTS search method available');
+        }
 
         return results.map((row) => ({
           scratchpad: {
@@ -503,6 +594,7 @@ export class ScratchpadDatabase {
       } catch (error) {
         console.warn('FTS5 搜尋失敗，降級到 LIKE 搜尋:', error);
         this.hasFTS5 = false; // 禁用 FTS5 避免重複錯誤
+        this.hasSimpleTokenizer = false; // 也禁用 simple 擴展
       }
     }
 

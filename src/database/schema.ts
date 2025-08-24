@@ -5,7 +5,7 @@ import type Database from 'better-sqlite3';
 
 export const SCHEMA_VERSION = 3;
 
-export const initializeSchema = (db: Database.Database): void => {
+export const initializeSchema = (db: Database.Database, tokenizer: string = 'porter unicode61'): void => {
   // Enable foreign key support
   db.pragma('foreign_keys = ON');
   
@@ -75,7 +75,7 @@ export const initializeSchema = (db: Database.Database): void => {
           content,
           content='scratchpads',
           content_rowid='rowid',
-          tokenize='porter unicode61'
+          tokenize='${tokenizer}'
         )
       `);
 
