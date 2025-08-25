@@ -53,16 +53,47 @@ export const createWorkflowTool = (db: ScratchpadDatabase): ToolHandler<CreateWo
 };
 
 /**
- * List all workflows
+ * List all workflows with pagination and output control
  */
 export const listWorkflowsTool = (db: ScratchpadDatabase): ToolHandler<ListWorkflowsArgs, ListWorkflowsResult> => {
   return async (args: ListWorkflowsArgs): Promise<ListWorkflowsResult> => {
     try {
-      const workflows = db.getWorkflows(args.project_scope);
+      // Apply output control with sensible defaults
+      const limit = Math.min(args.limit ?? 20, 100); // Default 20, max 100
+      const offset = args.offset ?? 0;
+
+      const allWorkflows = db.getWorkflows(args.project_scope);
+      
+      // Apply pagination
+      const paginatedWorkflows = allWorkflows.slice(offset, offset + limit);
+      
+      // Apply preview mode or content control
+      const formattedWorkflows = paginatedWorkflows.map(workflow => {
+        const formatted = formatWorkflow(workflow);
+        
+        // Apply content control to description
+        if (formatted.description) {
+          if (args.preview_mode) {
+            const maxDescChars = args.max_content_chars ?? 200;
+            if (formatted.description.length > maxDescChars) {
+              formatted.description = formatted.description.substring(0, maxDescChars) + '...（截斷）';
+            }
+          } else if (args.max_content_chars && formatted.description.length > args.max_content_chars) {
+            formatted.description = formatted.description.substring(0, args.max_content_chars) + '...（截斷）';
+          }
+        }
+        
+        // If include_content is false, remove description
+        if (args.include_content === false) {
+          formatted.description = null;
+        }
+        
+        return formatted;
+      });
 
       return {
-        workflows: workflows.map(formatWorkflow),
-        count: workflows.length,
+        workflows: formattedWorkflows,
+        count: formattedWorkflows.length,
       };
     } catch (error) {
       throw new Error(`Failed to list workflows: ${error instanceof Error ? error.message : 'Unknown error'}`);

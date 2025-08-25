@@ -183,6 +183,30 @@ class ScratchpadMCPServer {
                   type: 'string',
                   description: 'Optional project scope to filter workflows by project',
                 },
+                limit: {
+                  type: 'number',
+                  description: 'Maximum number of workflows to return (default: 20, max: 100)',
+                  minimum: 1,
+                  maximum: 100,
+                },
+                offset: {
+                  type: 'number',
+                  description: 'Number of workflows to skip for pagination (default: 0)',
+                  minimum: 0,
+                },
+                preview_mode: {
+                  type: 'boolean',
+                  description: 'Preview mode - truncate workflow descriptions for brevity',
+                },
+                max_content_chars: {
+                  type: 'number',
+                  description: 'Maximum characters for workflow description content',
+                  minimum: 10,
+                },
+                include_content: {
+                  type: 'boolean',
+                  description: 'Whether to include workflow descriptions in response',
+                },
               },
             },
           },
@@ -249,6 +273,19 @@ class ScratchpadMCPServer {
                   type: 'string',
                   description: 'ID of the scratchpad to retrieve',
                 },
+                preview_mode: {
+                  type: 'boolean',
+                  description: 'Preview mode - return truncated content for brevity',
+                },
+                max_content_chars: {
+                  type: 'number',
+                  description: 'Maximum characters for scratchpad content (default: 2000)',
+                  minimum: 10,
+                },
+                include_content: {
+                  type: 'boolean',
+                  description: 'Whether to include full content in response',
+                },
               },
               required: ['id'],
             },
@@ -283,14 +320,27 @@ class ScratchpadMCPServer {
                 },
                 limit: {
                   type: 'number',
-                  description: 'Maximum number of scratchpads to return (default: 50, max: 100)',
+                  description: 'Maximum number of scratchpads to return (default: 20, max: 50)',
                   minimum: 1,
-                  maximum: 100,
+                  maximum: 50,
                 },
                 offset: {
                   type: 'number',
                   description: 'Number of scratchpads to skip (default: 0)',
                   minimum: 0,
+                },
+                preview_mode: {
+                  type: 'boolean',
+                  description: 'Preview mode - return truncated content for brevity',
+                },
+                max_content_chars: {
+                  type: 'number',
+                  description: 'Maximum characters per scratchpad content',
+                  minimum: 10,
+                },
+                include_content: {
+                  type: 'boolean',
+                  description: 'Whether to include full content in response',
                 },
               },
               required: ['workflow_id'],
@@ -312,9 +362,27 @@ class ScratchpadMCPServer {
                 },
                 limit: {
                   type: 'number',
-                  description: 'Maximum number of results to return (default: 20, max: 50)',
+                  description: 'Maximum number of results to return (default: 10, max: 20)',
                   minimum: 1,
-                  maximum: 50,
+                  maximum: 20,
+                },
+                offset: {
+                  type: 'number',
+                  description: 'Number of results to skip for pagination (default: 0)',
+                  minimum: 0,
+                },
+                preview_mode: {
+                  type: 'boolean',
+                  description: 'Preview mode - return truncated content for search results',
+                },
+                max_content_chars: {
+                  type: 'number',
+                  description: 'Maximum characters per scratchpad content in search results',
+                  minimum: 10,
+                },
+                include_content: {
+                  type: 'boolean',
+                  description: 'Whether to include full content in search results',
                 },
               },
               required: ['query'],
