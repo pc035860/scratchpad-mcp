@@ -75,4 +75,5 @@ export interface SearchScratchpadsParams {
   query: string;
   workflow_id?: string | undefined;
   limit?: number;
+  useJieba?: boolean; // 可選：是否使用 jieba 結巴分詞搜尋
 }

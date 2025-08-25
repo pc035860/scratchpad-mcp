@@ -48,3 +48,4 @@ logs/
 
 # Optional Chinese tokenizer extensions
 extensions/
+dict

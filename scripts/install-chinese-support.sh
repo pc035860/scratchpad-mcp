@@ -40,15 +40,66 @@ if [[ ! -d "extensions/dict" ]]; then
     exit 1
 fi
 
+# Create symlink for jieba dictionaries (required for jieba_query)
+echo "🔗 Creating dictionary symlink..."
+if [[ -L "./dict" ]]; then
+    echo "   Removing existing symlink..."
+    rm ./dict
+fi
+
+ln -sf extensions/dict ./dict
+
+if [[ ! -L "./dict" ]]; then
+    echo "❌ Failed to create dictionary symlink"
+    exit 1
+fi
+
 echo "✅ Chinese tokenizer support installed successfully!"
 echo ""
-echo "📁 Installed files:"
-echo "   - extensions/$EXT_FILE"
-echo "   - extensions/dict/ (Chinese dictionaries)"
+echo "🧪 Verifying jieba functionality..."
+
+# Quick verification test (requires Node.js)
+if command -v node >/dev/null 2>&1; then
+    cat > verify_jieba.js << EOF
+const Database = require('better-sqlite3');
+try {
+    const db = new Database(':memory:');
+    db.loadExtension('./extensions/$EXT_FILE');
+    db.exec('CREATE VIRTUAL TABLE test_fts USING fts5(content, tokenize="simple")');
+    const result = db.prepare("SELECT simple_query('测试') as result").get();
+    console.log('   ✅ Extension loads successfully');
+    
+    // Test jieba query (will fail gracefully if dictionaries not found)
+    try {
+        const jiebaResult = db.prepare("SELECT jieba_query('测试分词') as result").get();
+        console.log('   ✅ Jieba tokenization working');
+    } catch(e) {
+        console.log('   ⚠️  Jieba needs dictionary symlink (run from project root)');
+    }
+    db.close();
+} catch(e) {
+    console.log('   ⚠️  Manual verification needed (SQLite extension test failed)');
+}
+EOF
+    node verify_jieba.js 2>/dev/null
+    rm verify_jieba.js
+else
+    echo "   ⚠️  Node.js not found, skipping verification"
+fi
+
 echo ""
-echo "🔍 You can now search Chinese text with improved word segmentation and Pinyin support."
-echo "📖 Example searches:"
-echo "   - Chinese: '周杰倫' or '自然語言處理'"
-echo "   - Pinyin: 'zhoujielun' or 'ziranyuyanchuli'"
+echo "📁 Installed files:"
+echo "   - extensions/$EXT_FILE (SQLite extension)"
+echo "   - extensions/dict/ (Chinese dictionaries)"
+echo "   - ./dict -> extensions/dict (symlink for jieba)"
+echo ""
+echo "🧠 Features enabled:"
+echo "   - Smart jieba tokenization for Chinese text"
+echo "   - Automatic mode selection (Chinese -> jieba, others -> simple/FTS5)"
+echo "   - Multi-tier fallback: jieba -> simple -> FTS5 -> LIKE"
+echo ""
+echo "🔍 Example searches:"
+echo "   - Auto jieba: '自然語言處理' or '機器學習'"
+echo "   - Manual control: useJieba: true/false in API"
 echo ""
 echo "🚀 Start the MCP server with: npm run dev"

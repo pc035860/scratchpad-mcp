@@ -33,6 +33,7 @@ export class ScratchpadDatabase {
   private db: Database.Database;
   private hasFTS5: boolean = false;
   private hasSimpleTokenizer = false; // Simple 中文分詞擴展可用性
+  private hasJiebaTokenizer = false; // Jieba 結巴分詞功能可用性
   private readonly MAX_SCRATCHPAD_SIZE = 1024 * 1024; // 1MB
   private readonly MAX_SCRATCHPADS_PER_WORKFLOW = 50;
 
@@ -41,8 +42,10 @@ export class ScratchpadDatabase {
    */
   private loadSimpleTokenizer(): void {
     try {
-      // 尋找 Simple 擴展檔案路徑（處理 .ts 和 .js 編譯差異）
-      const extensionPath = path.resolve(__dirname, '../../extensions/libsimple');
+      // 智慧檢測：如果在 dist/ 目錄中運行，調整路徑深度
+      const isInDist = __dirname.includes('/dist');
+      const relativePath = isInDist ? '../extensions/libsimple' : '../../extensions/libsimple';
+      const extensionPath = path.resolve(__dirname, relativePath);
       
       // 嘗試載入擴展
       this.db.loadExtension(extensionPath);
@@ -224,6 +227,40 @@ export class ScratchpadDatabase {
   }
 
   /**
+   * 使用 jieba_query() 進行結巴分詞搜尋
+   * 提供更智慧的中文語意分析和搜尋體驗
+   */
+  private searchWithJieba(query: string, workflowId?: string, limit: number = 20): Array<{
+    id: string; workflow_id: string; title: string; content: string; created_at: number; updated_at: number; size_bytes: number;
+    w_id: string; w_name: string; w_description: string | null; w_created_at: number; w_updated_at: number; w_scratchpad_count: number; w_is_active: number; w_project_scope: string | null;
+    rank: number;
+  }> {
+    // 使用參數化查詢防止 SQL 注入
+    const sql = `
+      SELECT 
+        s.id, s.workflow_id, s.title, s.content, s.created_at, s.updated_at, s.size_bytes,
+        w.id as w_id, w.name as w_name, w.description as w_description, 
+        w.created_at as w_created_at, w.updated_at as w_updated_at, 
+        w.scratchpad_count as w_scratchpad_count, w.is_active as w_is_active, w.project_scope as w_project_scope,
+        fts.rank
+      FROM scratchpads_fts fts
+      JOIN scratchpads s ON s.rowid = fts.rowid
+      JOIN workflows w ON s.workflow_id = w.id
+      WHERE scratchpads_fts MATCH jieba_query(?)
+      AND (? IS NULL OR s.workflow_id = ?)
+      ORDER BY fts.rank
+      LIMIT ?
+    `;
+    
+    const stmt = this.db.prepare(sql);
+    return stmt.all(query, workflowId, workflowId, limit) as Array<{
+      id: string; workflow_id: string; title: string; content: string; created_at: number; updated_at: number; size_bytes: number;
+      w_id: string; w_name: string; w_description: string | null; w_created_at: number; w_updated_at: number; w_scratchpad_count: number; w_is_active: number; w_project_scope: string | null;
+      rank: number;
+    }>;
+  }
+
+  /**
    * 檢查 FTS5 健康狀態
    * 如果 FTS5 出現問題，自動降級到 LIKE 搜尋
    */
@@ -238,9 +275,25 @@ export class ScratchpadDatabase {
       if (this.hasSimpleTokenizer) {
         try {
           this.db.prepare("SELECT simple_query('test') as result").get();
+          
+          // 重新啟用 jieba 檢查，字典路徑已透過符號連結解決
+          try {
+            // 測試 jieba_query() 是否正常工作 - 使用更安全的測試方式
+            const testResult = this.db.prepare("SELECT jieba_query('test') as result").get() as { result: string } | undefined;
+            if (testResult?.result) {
+              this.hasJiebaTokenizer = true;
+              console.log('✅ Jieba 結巴分詞功能完全可用');
+            } else {
+              throw new Error('jieba_query returned empty result');
+            }
+          } catch (jiebaError) {
+            console.warn('⚠️ Jieba 功能不可用，使用 simple_query:', jiebaError instanceof Error ? jiebaError.message : jiebaError);
+            this.hasJiebaTokenizer = false;
+          }
         } catch (simpleError) {
           console.warn('⚠️ Simple 擴展函數測試失敗，降級到基本 FTS5:', simpleError);
           this.hasSimpleTokenizer = false;
+          this.hasJiebaTokenizer = false; // Simple 不可用時，jieba 也不可用
         }
       }
       
@@ -526,12 +579,43 @@ export class ScratchpadDatabase {
           rank: number;
         }>;
 
-        if (this.hasSimpleTokenizer) {
-          // 使用 simple_query() 函數 - 需要動態構建 SQL
-          const escapedQuery = params.query.replace(/'/g, "''");
-          const workflowFilter = params.workflow_id ? `AND s.workflow_id = '${params.workflow_id.replace(/'/g, "''")}'` : '';
-          
-          const dynamicSql = `
+        // 智慧模式選擇：自動偵測中文內容並選擇最佳搜尋方式
+        const hasChinese = /[\u4e00-\u9fa5]/.test(params.query);
+        const shouldUseJieba = params.useJieba || (hasChinese && this.hasJiebaTokenizer);
+
+        if (shouldUseJieba && this.hasJiebaTokenizer) {
+          // 優先使用 jieba_query() 結巴分詞搜尋 - 提供最佳中文搜尋體驗
+          try {
+            results = this.searchWithJieba(params.query, params.workflow_id, limit);
+          } catch (jiebaError) {
+            console.warn('⚠️ Jieba 搜尋失敗，降級到 simple_query:', jiebaError);
+            // 降級到 simple_query，使用參數化查詢
+            const sql = `
+              SELECT 
+                s.id, s.workflow_id, s.title, s.content, s.created_at, s.updated_at, s.size_bytes,
+                w.id as w_id, w.name as w_name, w.description as w_description, 
+                w.created_at as w_created_at, w.updated_at as w_updated_at, 
+                w.scratchpad_count as w_scratchpad_count, w.is_active as w_is_active, w.project_scope as w_project_scope,
+                fts.rank
+              FROM scratchpads_fts fts
+              JOIN scratchpads s ON s.rowid = fts.rowid
+              JOIN workflows w ON s.workflow_id = w.id
+              WHERE scratchpads_fts MATCH simple_query(?)
+              AND (? IS NULL OR s.workflow_id = ?)
+              ORDER BY fts.rank
+              LIMIT ?
+            `;
+            
+            const stmt = this.db.prepare(sql);
+            results = stmt.all(params.query, params.workflow_id, params.workflow_id, limit) as Array<{
+              id: string; workflow_id: string; title: string; content: string; created_at: number; updated_at: number; size_bytes: number;
+              w_id: string; w_name: string; w_description: string | null; w_created_at: number; w_updated_at: number; w_scratchpad_count: number; w_is_active: number; w_project_scope: string | null;
+              rank: number;
+            }>;
+          }
+        } else if (this.hasSimpleTokenizer) {
+          // 使用 simple_query() 函數，使用參數化查詢
+          const sql = `
             SELECT 
               s.id, s.workflow_id, s.title, s.content, s.created_at, s.updated_at, s.size_bytes,
               w.id as w_id, w.name as w_name, w.description as w_description, 
@@ -541,13 +625,14 @@ export class ScratchpadDatabase {
             FROM scratchpads_fts fts
             JOIN scratchpads s ON s.rowid = fts.rowid
             JOIN workflows w ON s.workflow_id = w.id
-            WHERE scratchpads_fts MATCH simple_query('${escapedQuery}')
-            ${workflowFilter}
+            WHERE scratchpads_fts MATCH simple_query(?)
+            AND (? IS NULL OR s.workflow_id = ?)
             ORDER BY fts.rank
-            LIMIT ${limit}
+            LIMIT ?
           `;
           
-          results = this.db.prepare(dynamicSql).all() as Array<{
+          const stmt = this.db.prepare(sql);
+          results = stmt.all(params.query, params.workflow_id, params.workflow_id, limit) as Array<{
             id: string; workflow_id: string; title: string; content: string; created_at: number; updated_at: number; size_bytes: number;
             w_id: string; w_name: string; w_description: string | null; w_created_at: number; w_updated_at: number; w_scratchpad_count: number; w_is_active: number; w_project_scope: string | null;
             rank: number;
@@ -650,6 +735,8 @@ export class ScratchpadDatabase {
     totalWorkflows: number;
     totalScratchpads: number;
     hasFTS5: boolean;
+    hasSimpleTokenizer: boolean;
+    hasJiebaTokenizer: boolean;
     walMode: boolean;
     walSize?: number;
     ftsIndexHealth: boolean;
@@ -693,6 +780,8 @@ export class ScratchpadDatabase {
       totalWorkflows: workflowCount.count,
       totalScratchpads: scratchpadCount.count,
       hasFTS5: this.hasFTS5,
+      hasSimpleTokenizer: this.hasSimpleTokenizer,
+      hasJiebaTokenizer: this.hasJiebaTokenizer,
       walMode: isWalMode,
       ...(walSize !== undefined && { walSize }),
       ftsIndexHealth,
