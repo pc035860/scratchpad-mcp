@@ -93,6 +93,7 @@ export const searchScratchpadsTool = (db: ScratchpadDatabase): ToolHandler<Searc
         query: args.query,
         workflow_id: args.workflow_id ?? undefined,
         limit,
+        ...(args.useJieba !== undefined && { useJieba: args.useJieba }),
       });
 
       // Extract search method from database stats

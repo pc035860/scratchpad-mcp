@@ -239,7 +239,7 @@ describe('MCP Tools Integration Tests', () => {
           workflow_id: workflowId,
           title: 'Test Scratchpad',
           content: 'This is test content for the scratchpad.',
-          include_full_content: true,
+          include_content: true,
         });
         
         expect(result).not.toHaveProperty('error');
@@ -295,7 +295,7 @@ describe('MCP Tools Integration Tests', () => {
           workflow_id: workflowId,
           title: 'Test Scratchpad for Get',
           content: 'Content for get test',
-          include_full_content: true,
+          include_content: true,
         });
         expect(createResult).not.toHaveProperty('error');
         scratchpadId = createResult.scratchpad.id;
@@ -342,7 +342,7 @@ describe('MCP Tools Integration Tests', () => {
           workflow_id: workflowId,
           title: 'Test Scratchpad for Append',
           content: 'Initial content',
-          include_full_content: true,
+          include_content: true,
         });
         expect(createResult).not.toHaveProperty('error');
         scratchpadId = createResult.scratchpad.id;
@@ -352,7 +352,7 @@ describe('MCP Tools Integration Tests', () => {
         const appendResult = await helper.callAppendScratchpad({
           id: scratchpadId,
           content: '\nAppended content',
-          include_full_content: true,
+          include_content: true,
         });
         
         expect(appendResult).not.toHaveProperty('error');
@@ -399,13 +399,13 @@ describe('MCP Tools Integration Tests', () => {
         await helper.callAppendScratchpad({
           id: scratchpadId,
           content: '\nSecond append',
-          include_full_content: true,
+          include_content: true,
         });
         
         const result = await helper.callAppendScratchpad({
           id: scratchpadId,
           content: '\nThird append',
-          include_full_content: true,
+          include_content: true,
         });
         
         expect(result).not.toHaveProperty('error');
@@ -422,7 +422,7 @@ describe('MCP Tools Integration Tests', () => {
           workflow_id: workflowId,
           title: 'Test Scratchpad for Tail',
           content: testContent,
-          include_full_content: true,
+          include_content: true,
         });
         expect(createResult).not.toHaveProperty('error');
         scratchpadId = createResult.scratchpad.id;
@@ -447,7 +447,7 @@ describe('MCP Tools Integration Tests', () => {
       it('should get tail content by specific number of lines', async () => {
         const result = await helper.callTailScratchpad({
           id: scratchpadId,
-          lines: 3,
+          tail_size: { lines: 3 },
         });
 
         expect(result).not.toHaveProperty('error');
@@ -460,7 +460,7 @@ describe('MCP Tools Integration Tests', () => {
       it('should get tail content by character count', async () => {
         const result = await helper.callTailScratchpad({
           id: scratchpadId,
-          chars: 20,
+          tail_size: { chars: 20 },
         });
 
         expect(result).not.toHaveProperty('error');
@@ -471,11 +471,10 @@ describe('MCP Tools Integration Tests', () => {
         expect(result.scratchpad.tail_lines).toBe(3);
       });
 
-      it('should prioritize chars parameter over lines parameter', async () => {
+      it('should handle chars-based tail extraction correctly', async () => {
         const result = await helper.callTailScratchpad({
           id: scratchpadId,
-          lines: 5,
-          chars: 10,
+          tail_size: { chars: 10 },
         });
 
         expect(result).not.toHaveProperty('error');
@@ -486,19 +485,17 @@ describe('MCP Tools Integration Tests', () => {
         expect(result.scratchpad.tail_lines).toBe(2);
       });
 
-      it('should handle preview_mode with tail content', async () => {
+      it('should handle tail with specific lines count', async () => {
         const result = await helper.callTailScratchpad({
           id: scratchpadId,
-          lines: 5,
-          preview_mode: true,
-          max_content_chars: 10,
+          tail_size: { lines: 5 },
         });
 
         expect(result).not.toHaveProperty('error');
         expect(result.scratchpad).not.toBeNull();
-        expect(result.scratchpad.content).toHaveLength(13); // 10 chars + '...'
-        expect(result.scratchpad.content_control_applied).toContain('tail + preview_mode');
-        expect(result.scratchpad.preview_summary).toBeDefined();
+        expect(result.scratchpad.content).toBe('Line 6\nLine 7\nLine 8\nLine 9\nLine 10');
+        expect(result.scratchpad.tail_lines).toBe(5);
+        expect(result.scratchpad.total_lines).toBe(10);
       });
 
       it('should handle include_content false', async () => {
@@ -510,21 +507,20 @@ describe('MCP Tools Integration Tests', () => {
         expect(result).not.toHaveProperty('error');
         expect(result.scratchpad).not.toBeNull();
         expect(result.scratchpad.content).toBe('');
-        expect(result.scratchpad.parameter_warning).toContain('include_content=false');
+        expect(result.message).toContain('Content excluded (include_content=false)');
       });
 
-      it('should handle max_content_chars truncation on tail content', async () => {
+      it('should handle full content tail extraction', async () => {
         const result = await helper.callTailScratchpad({
           id: scratchpadId,
-          lines: 10,
-          max_content_chars: 30,
+          tail_size: { lines: 10 },
         });
 
         expect(result).not.toHaveProperty('error');
         expect(result.scratchpad).not.toBeNull();
-        expect(result.scratchpad.content.length).toBeLessThanOrEqual(37); // 30 + '...（截斷）' (7字符)
-        expect(result.scratchpad.content_truncated).toBe(true);
-        expect(result.scratchpad.content_control_applied).toContain('tail content truncated');
+        expect(result.scratchpad.content).toBe(testContent);
+        expect(result.scratchpad.tail_lines).toBe(10);
+        expect(result.scratchpad.total_lines).toBe(10);
       });
 
       it('should handle invalid scratchpad id', async () => {
@@ -540,7 +536,7 @@ describe('MCP Tools Integration Tests', () => {
       it('should handle edge case with more lines requested than available', async () => {
         const result = await helper.callTailScratchpad({
           id: scratchpadId,
-          lines: 100, // More than the 10 lines available
+          tail_size: { lines: 100 }, // More than the 10 lines available
         });
 
         expect(result).not.toHaveProperty('error');
@@ -553,7 +549,7 @@ describe('MCP Tools Integration Tests', () => {
       it('should handle edge case with more chars requested than available', async () => {
         const result = await helper.callTailScratchpad({
           id: scratchpadId,
-          chars: 1000, // More than the content length
+          tail_size: { chars: 1000 }, // More than the content length
         });
 
         expect(result).not.toHaveProperty('error');

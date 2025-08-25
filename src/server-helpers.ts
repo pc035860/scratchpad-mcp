@@ -290,25 +290,33 @@ export function validateTailScratchpadArgs(args: unknown): TailScratchpadArgs {
     id: obj['id'],
   };
   
-  if (obj['lines'] !== undefined) {
-    if (typeof obj['lines'] !== 'number' || !Number.isInteger(obj['lines']) || obj['lines'] < 1) {
-      throw new Error('Invalid arguments: lines must be a positive integer');
+  // Handle tail_size object structure (new simplified design)
+  if (obj['tail_size'] !== undefined) {
+    if (!obj['tail_size'] || typeof obj['tail_size'] !== 'object') {
+      throw new Error('Invalid arguments: tail_size must be an object');
     }
-    result.lines = obj['lines'];
-  }
-  
-  if (obj['chars'] !== undefined) {
-    if (typeof obj['chars'] !== 'number' || !Number.isInteger(obj['chars']) || obj['chars'] < 1) {
-      throw new Error('Invalid arguments: chars must be a positive integer');
+    
+    const tailSize = obj['tail_size'] as Record<string, unknown>;
+    
+    // Validate that only one of lines or chars is specified
+    const hasLines = tailSize['lines'] !== undefined;
+    const hasChars = tailSize['chars'] !== undefined;
+    
+    if (hasLines && hasChars) {
+      throw new Error('Invalid arguments: tail_size must specify either lines OR chars, not both');
     }
-    result.chars = obj['chars'];
-  }
-  
-  if (obj['max_content_chars'] !== undefined) {
-    if (typeof obj['max_content_chars'] !== 'number' || !Number.isInteger(obj['max_content_chars']) || obj['max_content_chars'] < 1) {
-      throw new Error('Invalid arguments: max_content_chars must be a positive integer');
+    
+    if (hasLines) {
+      if (typeof tailSize['lines'] !== 'number' || !Number.isInteger(tailSize['lines']) || tailSize['lines'] < 1) {
+        throw new Error('Invalid arguments: tail_size.lines must be a positive integer');
+      }
+      result.tail_size = { lines: tailSize['lines'] };
+    } else if (hasChars) {
+      if (typeof tailSize['chars'] !== 'number' || !Number.isInteger(tailSize['chars']) || tailSize['chars'] < 1) {
+        throw new Error('Invalid arguments: tail_size.chars must be a positive integer');
+      }
+      result.tail_size = { chars: tailSize['chars'] };
     }
-    result.max_content_chars = obj['max_content_chars'];
   }
   
   if (obj['include_content'] !== undefined) {
@@ -316,13 +324,6 @@ export function validateTailScratchpadArgs(args: unknown): TailScratchpadArgs {
       throw new Error('Invalid arguments: include_content must be a boolean');
     }
     result.include_content = obj['include_content'];
-  }
-  
-  if (obj['preview_mode'] !== undefined) {
-    if (typeof obj['preview_mode'] !== 'boolean') {
-      throw new Error('Invalid arguments: preview_mode must be a boolean');
-    }
-    result.preview_mode = obj['preview_mode'];
   }
   
   return result;

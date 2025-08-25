@@ -268,7 +268,7 @@ class ScratchpadMCPServer {
                   type: 'string',
                   description: 'Content of the scratchpad',
                 },
-                include_full_content: {
+                include_content: {
                   type: 'boolean',
                   description: 'Whether to return full content in response (default: false, returns metadata only)',
                 },
@@ -278,7 +278,7 @@ class ScratchpadMCPServer {
           },
           {
             name: 'get-scratchpad',
-            description: 'Retrieve a scratchpad by its ID',
+            description: 'Retrieve a scratchpad by its ID. Use preview_mode for quick overview, max_content_chars to limit size, or include_content=false for metadata only.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -288,16 +288,16 @@ class ScratchpadMCPServer {
                 },
                 preview_mode: {
                   type: 'boolean',
-                  description: 'Preview mode - return truncated content for brevity',
+                  description: 'Preview mode - returns ~200 chars with smart truncation. Takes precedence over max_content_chars.',
                 },
                 max_content_chars: {
                   type: 'number',
-                  description: 'Maximum characters for scratchpad content (default: 2000)',
+                  description: 'Maximum characters limit (default: 2000). Only applies when include_content is not false.',
                   minimum: 10,
                 },
                 include_content: {
                   type: 'boolean',
-                  description: 'Whether to include full content in response',
+                  description: 'Whether to include content in response. false=metadata only (overrides other content options), true=include content.',
                 },
               },
               required: ['id'],
@@ -317,7 +317,7 @@ class ScratchpadMCPServer {
                   type: 'string',
                   description: 'Content to append to the scratchpad',
                 },
-                include_full_content: {
+                include_content: {
                   type: 'boolean',
                   description: 'Whether to return full content in response (default: false, returns metadata only)',
                 },
@@ -327,7 +327,7 @@ class ScratchpadMCPServer {
           },
           {
             name: 'tail-scratchpad',
-            description: 'Get tail content from scratchpad (last N lines or chars)',
+            description: 'Get tail content from scratchpad - SIMPLIFIED DESIGN',
             inputSchema: {
               type: 'object',
               properties: {
@@ -335,28 +335,39 @@ class ScratchpadMCPServer {
                   type: 'string',
                   description: 'ID of the scratchpad to get tail from',
                 },
-                lines: {
-                  type: 'number',
-                  description: 'Number of lines to return from the end (default: 50)',
-                  minimum: 1,
-                },
-                chars: {
-                  type: 'number',
-                  description: 'Maximum characters to return (overrides lines if specified)',
-                  minimum: 1,
-                },
-                max_content_chars: {
-                  type: 'number',
-                  description: 'Maximum characters for tail content',
-                  minimum: 1,
+                tail_size: {
+                  type: 'object',
+                  description: 'Tail size specification - choose either lines OR chars, not both',
+                  oneOf: [
+                    {
+                      type: 'object',
+                      properties: {
+                        lines: {
+                          type: 'number',
+                          description: 'Number of lines to return from the end',
+                          minimum: 1,
+                        },
+                      },
+                      required: ['lines'],
+                      additionalProperties: false,
+                    },
+                    {
+                      type: 'object',
+                      properties: {
+                        chars: {
+                          type: 'number',
+                          description: 'Number of characters to return from the end',
+                          minimum: 1,
+                        },
+                      },
+                      required: ['chars'],
+                      additionalProperties: false,
+                    },
+                  ],
                 },
                 include_content: {
                   type: 'boolean',
-                  description: 'Whether to include content in response',
-                },
-                preview_mode: {
-                  type: 'boolean',
-                  description: 'Preview mode - return truncated content with preview',
+                  description: 'Whether to include content in response (default: true)',
                 },
               },
               required: ['id'],
@@ -364,7 +375,7 @@ class ScratchpadMCPServer {
           },
           {
             name: 'list-scratchpads',
-            description: 'List scratchpads in a workflow',
+            description: 'List scratchpads in a workflow. Options: preview_mode (quick overview), max_content_chars (size limit), include_content=false (metadata only). Priority: include_content > preview_mode > max_content_chars.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -402,7 +413,7 @@ class ScratchpadMCPServer {
           },
           {
             name: 'search-scratchpads',
-            description: 'Search for scratchpads using full-text search',
+            description: 'Search for scratchpads using full-text search with FTS5 or LIKE fallback. Content control same as list-scratchpads: include_content > preview_mode > max_content_chars.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -437,6 +448,10 @@ class ScratchpadMCPServer {
                 include_content: {
                   type: 'boolean',
                   description: 'Whether to include full content in search results',
+                },
+                useJieba: {
+                  type: 'boolean',
+                  description: 'Force jieba tokenization (auto-detect by default)',
                 },
               },
               required: ['query'],

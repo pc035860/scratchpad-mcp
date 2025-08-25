@@ -267,7 +267,7 @@ claude mcp get scratchpad-mcp-v2
 
 ### Available MCP Tools
 
-Once properly configured, Claude Code can use these 9 MCP tools:
+Once properly configured, Claude Code can use these 10 MCP tools:
 
 - `create-workflow` - Create new workflow containers
 - `list-workflows` - List all available workflows  
@@ -276,6 +276,7 @@ Once properly configured, Claude Code can use these 9 MCP tools:
 - `create-scratchpad` - Create scratchpads within workflows
 - `get-scratchpad` - Retrieve scratchpad content
 - `append-scratchpad` - Append content to existing scratchpads
+- `tail-scratchpad` - Get tail content from scratchpad (simplified design)
 - `list-scratchpads` - List scratchpads in a workflow
 - `search-scratchpads` - Full-text search with intelligent Chinese tokenization
 
@@ -387,6 +388,7 @@ Create a new scratchpad within a workflow.
   workflow_id: string;    // Target workflow ID (required)
   title: string;          // Scratchpad title (required)
   content: string;        // Initial content (required)
+  include_content?: boolean; // Whether to return full content in response (default: false)
 }
 ```
 
@@ -406,19 +408,44 @@ Append content to an existing scratchpad.
 {
   id: string;             // Scratchpad ID (required)
   content: string;        // Content to append (required)
+  include_content?: boolean; // Whether to return full content in response (default: false)
 }
 ```
 
+#### `tail-scratchpad`
+Get tail content from scratchpad with simplified design (choose either lines OR chars, not both).
+
+```typescript
+{
+  id: string;             // Scratchpad ID (required)
+  tail_size: {            // Tail size specification - SIMPLIFIED oneOf design
+    lines?: number;       // Number of lines from end (minimum: 1) 
+    chars?: number;       // Number of characters from end (minimum: 1)
+  };                      // Choose either lines OR chars, not both
+  include_content?: boolean; // Whether to include content in response (default: true)
+}
+```
+
+**Simplified Design Benefits:**
+- Clear either/or choice eliminates confusion
+- No complex multi-layer interactions
+- Single purpose per parameter
+
 #### `list-scratchpads`
-List scratchpads within a workflow with pagination.
+List scratchpads within a workflow with pagination and content control options.
 
 ```typescript
 {
   workflow_id: string;    // Workflow ID (required)
-  limit?: number;         // Max results (default: 50, max: 100)
+  limit?: number;         // Max results (default: 20, max: 50)
   offset?: number;        // Skip count (default: 0)
+  preview_mode?: boolean; // Preview mode - return truncated content for brevity
+  max_content_chars?: number; // Maximum characters per scratchpad content
+  include_content?: boolean; // Whether to include full content in response
 }
 ```
+
+**Content Control Priority**: `include_content` > `preview_mode` > `max_content_chars`
 
 ### Search & Discovery
 
@@ -429,10 +456,16 @@ Search scratchpads using full-text search with intelligent ranking and automatic
 {
   query: string;          // Search query (required)
   workflow_id?: string;   // Limit to specific workflow (optional)
-  limit?: number;         // Max results (default: 20, max: 50)
+  limit?: number;         // Max results (default: 10, max: 20)
+  offset?: number;        // Skip count for pagination (default: 0)
+  preview_mode?: boolean; // Preview mode - return truncated content for search results
+  max_content_chars?: number; // Maximum characters per scratchpad content in search results
+  include_content?: boolean; // Whether to include content in search results
   useJieba?: boolean;     // Force jieba tokenization (auto-detect by default)
 }
 ```
+
+**Content Control Priority**: Same as `list-scratchpads` - `include_content` > `preview_mode` > `max_content_chars`
 
 **Search Intelligence:**
 - **Automatic Detection**: Chinese text automatically uses jieba tokenization

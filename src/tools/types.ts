@@ -137,7 +137,7 @@ export interface CreateScratchpadArgs {
   title: string;
   content: string;
   /** Whether to return full content in response (default: false, returns metadata only) */
-  include_full_content?: boolean;
+  include_content?: boolean;
 }
 
 export interface CreateScratchpadResult {
@@ -179,7 +179,7 @@ export interface AppendScratchpadArgs {
   id: string;
   content: string;
   /** Whether to return full content in response (default: false, returns metadata only) */
-  include_full_content?: boolean;
+  include_content?: boolean;
 }
 
 export interface AppendScratchpadResult {
@@ -223,6 +223,7 @@ export interface ListScratchpadsResult {
 export interface SearchScratchpadsArgs extends Partial<OutputControlOptions> {
   query: string;
   workflow_id?: string;
+  useJieba?: boolean; // Force jieba tokenization (auto-detect by default)
 }
 
 export interface SearchScratchpadsResult {
@@ -294,13 +295,13 @@ export interface UpdateWorkflowStatusResult {
   previous_status: boolean;
 }
 
-// New tail-scratchpad tool types
-export interface TailScratchpadArgs extends Partial<Pick<OutputControlOptions, 'max_content_chars' | 'include_content' | 'preview_mode'>> {
+// New tail-scratchpad tool types - SIMPLIFIED DESIGN
+export interface TailScratchpadArgs {
   id: string;
-  /** Number of lines to return from the end (default: 50) */
-  lines?: number;
-  /** Maximum characters to return (overrides lines if specified) */
-  chars?: number;
+  /** Tail size specification - choose either lines OR chars, not both */
+  tail_size?: { lines: number } | { chars: number };
+  /** Whether to include content in response (default: true) */
+  include_content?: boolean;
 }
 
 export interface TailScratchpadResult {
