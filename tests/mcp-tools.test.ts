@@ -557,6 +557,54 @@ describe('MCP Tools Integration Tests', () => {
         expect(result.scratchpad.content).toBe(testContent);
         expect(result.scratchpad.tail_chars).toBe(testContent.length);
       });
+
+      // Full content mode tests
+      it('should get full content when full_content is true', async () => {
+        const result = await helper.callTailScratchpad({
+          id: scratchpadId,
+          full_content: true,
+        });
+
+        expect(result).not.toHaveProperty('error');
+        expect(result.scratchpad).not.toBeNull();
+        expect(result.scratchpad.content).toBe(testContent);
+        expect(result.scratchpad.is_tail_content).toBe(false); // Should be false for full content
+        expect(result.scratchpad.tail_lines).toBe(10); // All lines
+        expect(result.scratchpad.total_lines).toBe(10);
+        expect(result.scratchpad.tail_chars).toBe(testContent.length);
+        expect(result.message).toContain('Retrieved full content from');
+      });
+
+      it('should override tail_size when full_content is true', async () => {
+        const result = await helper.callTailScratchpad({
+          id: scratchpadId,
+          tail_size: { lines: 3 }, // This should be ignored
+          full_content: true,
+        });
+
+        expect(result).not.toHaveProperty('error');
+        expect(result.scratchpad).not.toBeNull();
+        expect(result.scratchpad.content).toBe(testContent); // Full content, not just 3 lines
+        expect(result.scratchpad.is_tail_content).toBe(false);
+        expect(result.scratchpad.tail_lines).toBe(10); // All lines, not 3
+        expect(result.message).toContain('Retrieved full content from');
+        expect(result.message).toContain('full content');
+      });
+
+      it('should respect include_content=false even with full_content=true', async () => {
+        const result = await helper.callTailScratchpad({
+          id: scratchpadId,
+          full_content: true,
+          include_content: false,
+        });
+
+        expect(result).not.toHaveProperty('error');
+        expect(result.scratchpad).not.toBeNull();
+        expect(result.scratchpad.content).toBe(''); // Content should be excluded
+        expect(result.scratchpad.is_tail_content).toBe(false);
+        expect(result.scratchpad.tail_lines).toBe(10);
+        expect(result.message).toContain('Content excluded (include_content=false)');
+      });
     });
   });
 

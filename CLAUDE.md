@@ -68,7 +68,7 @@ src/
 │   ├── ScratchpadDatabase.ts # Core database operations
 │   ├── schema.ts            # SQLite schema + FTS5 setup
 │   └── types.ts             # Database type definitions
-└── tools/                   # 7 MCP tools for workflow management
+└── tools/                   # 11 MCP tools for workflow management
     ├── workflow.ts          # create-workflow  
     ├── scratchpad.ts        # create/get/append/delete scratchpad
     └── search.ts            # list/search scratchpads
@@ -76,7 +76,7 @@ src/
 
 ### Key Components
 - **Database**: SQLite with FTS5 full-text search, WAL mode for performance
-- **MCP Tools**: 7 tools for workflow and scratchpad management
+- **MCP Tools**: 11 tools for workflow and scratchpad management
 - **Server Helpers**: Type-safe parameter validation for all MCP operations
 
 ### Data Model
@@ -98,6 +98,8 @@ This server implements MCP for inter-agent communication via stdio. The built ex
 1. **Workflow Management**: Creating and organizing work contexts
 2. **Content Management**: CRUD operations on scratchpads  
 3. **Search & Discovery**: Finding content across workflows
+
+**Key Tool Enhancement**: `tail-scratchpad` now supports full content retrieval via `full_content: true` parameter, making it a complete alternative to `get-scratchpad` when needed.
 
 ### Development Tools
 - **Build**: tsup (zero-config builds)

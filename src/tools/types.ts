@@ -302,6 +302,8 @@ export interface TailScratchpadArgs {
   tail_size?: { lines: number } | { chars: number };
   /** Whether to include content in response (default: true) */
   include_content?: boolean;
+  /** Whether to return full content instead of tail (overrides tail_size) */
+  full_content?: boolean;
 }
 
 export interface TailScratchpadResult {

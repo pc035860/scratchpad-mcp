@@ -260,13 +260,21 @@ export const tailScratchpadTool = (db: ScratchpadDatabase): ToolHandler<TailScra
       const content = scratchpad.content;
       const totalLines = content.split('\n').length;
       
-      // SIMPLIFIED: Determine tail extraction method using clear tail_size object
+      // Handle full content mode (overrides tail_size)
       let tailContent: string;
       let tailLines: number;
       let tailChars: number;
       let extractionMethod: string;
+      let isFullContent = false;
       
-      if (args.tail_size) {
+      if (args.full_content) {
+        // Full content mode - use formatScratchpad for output control
+        tailContent = content;
+        tailLines = totalLines;
+        tailChars = content.length;
+        extractionMethod = 'full content';
+        isFullContent = true;
+      } else if (args.tail_size) {
         if ('chars' in args.tail_size) {
           // Extract by character count
           const chars = args.tail_size.chars;
@@ -298,11 +306,11 @@ export const tailScratchpadTool = (db: ScratchpadDatabase): ToolHandler<TailScra
         extractionMethod = 'last 50 lines (default)';
       }
 
-      // SIMPLIFIED: Only handle include_content flag
+      // Handle include_content flag
       const includeContent = args.include_content ?? true;
       const finalContent = includeContent ? tailContent : '';
       
-      // Create simplified tail scratchpad result
+      // Create tail scratchpad result
       const result = {
         id: scratchpad.id,
         workflow_id: scratchpad.workflow_id,
@@ -311,14 +319,15 @@ export const tailScratchpadTool = (db: ScratchpadDatabase): ToolHandler<TailScra
         created_at: formatTimestamp(scratchpad.created_at),
         updated_at: formatTimestamp(scratchpad.updated_at),
         size_bytes: scratchpad.size_bytes, // Total size of original scratchpad
-        is_tail_content: true as const,
+        is_tail_content: !isFullContent as const, // false when full_content=true
         tail_lines: tailLines,
         tail_chars: tailChars,
         total_lines: totalLines,
       };
       
       // Generate clear informative message
-      let message = `Retrieved tail from scratchpad "${scratchpad.title}" (${extractionMethod})`;
+      const actionType = isFullContent ? 'Retrieved full content from' : 'Retrieved tail from';
+      let message = `${actionType} scratchpad "${scratchpad.title}" (${extractionMethod})`;
       message += ` - ${tailLines}/${totalLines} lines, ${tailChars} chars`;
       
       if (!includeContent) {

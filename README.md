@@ -33,7 +33,7 @@ node dist/server.js
 - **⚡ High Performance**: SQLite WAL mode with <100ms search response times
 - **🛡️ Type Safety**: Full TypeScript with strict mode and comprehensive validation
 - **📊 Size Management**: Support for 1MB scratchpads, 50 scratchpads per workflow
-- **🧪 Comprehensive Testing**: 50+ tests covering database, tools, and performance
+- **🧪 Comprehensive Testing**: 120+ tests covering database, tools, and performance
 - **🌐 Cross-Directory**: Works from any working directory via startup script
 
 ### 🎯 Optional Enhancements
@@ -267,7 +267,7 @@ claude mcp get scratchpad-mcp-v2
 
 ### Available MCP Tools
 
-Once properly configured, Claude Code can use these 10 MCP tools:
+Once properly configured, Claude Code can use these 11 MCP tools:
 
 - `create-workflow` - Create new workflow containers
 - `list-workflows` - List all available workflows  
@@ -276,7 +276,7 @@ Once properly configured, Claude Code can use these 10 MCP tools:
 - `create-scratchpad` - Create scratchpads within workflows
 - `get-scratchpad` - Retrieve scratchpad content
 - `append-scratchpad` - Append content to existing scratchpads
-- `tail-scratchpad` - Get tail content from scratchpad (simplified design)
+- `tail-scratchpad` - Get tail content from scratchpad, or full content with `full_content=true`
 - `list-scratchpads` - List scratchpads in a workflow
 - `search-scratchpads` - Full-text search with intelligent Chinese tokenization
 
@@ -413,23 +413,27 @@ Append content to an existing scratchpad.
 ```
 
 #### `tail-scratchpad`
-Get tail content from scratchpad with simplified design (choose either lines OR chars, not both).
+Get tail content from scratchpad, or full content with `full_content=true`. Enhanced design supports both traditional tail mode and complete content retrieval.
 
 ```typescript
 {
   id: string;             // Scratchpad ID (required)
-  tail_size: {            // Tail size specification - SIMPLIFIED oneOf design
+  tail_size?: {           // Tail size specification - SIMPLIFIED oneOf design
     lines?: number;       // Number of lines from end (minimum: 1) 
     chars?: number;       // Number of characters from end (minimum: 1)
   };                      // Choose either lines OR chars, not both
   include_content?: boolean; // Whether to include content in response (default: true)
+  full_content?: boolean; // Whether to return full content instead of tail (overrides tail_size)
 }
 ```
 
-**Simplified Design Benefits:**
-- Clear either/or choice eliminates confusion
-- No complex multi-layer interactions
-- Single purpose per parameter
+**Parameter Priority:** `full_content` > `tail_size` > default (50 lines)
+
+**Enhanced Design Benefits:**
+- **Dual Mode Operation**: Traditional tail mode OR complete content retrieval
+- **Get-scratchpad Alternative**: Use `full_content: true` when get-scratchpad is unavailable
+- **Backward Compatible**: All existing tail functionality preserved
+- **Clear Parameter Priority**: Simple, predictable behavior
 
 #### `list-scratchpads`
 List scratchpads within a workflow with pagination and content control options.
@@ -561,7 +565,7 @@ npm test -- tests/database.test.ts
 # Run MCP tools tests
 npm test -- tests/mcp-tools.test.ts
 ```
-- ✅ Parameter validation for all 9 tools
+- ✅ Parameter validation for all 11 tools
 - ✅ Full workflow scenario coverage
 - ✅ MCP protocol compliance
 - ✅ Error condition handling
@@ -599,7 +603,7 @@ npm test -- tests/project-scope.test.ts
 ### Architecture
 
 - **Server Layer**: MCP protocol implementation with stdio communication
-- **Tools Layer**: 9 core tools with comprehensive parameter validation
+- **Tools Layer**: 11 core tools with comprehensive parameter validation
 - **Database Layer**: SQLite with FTS5 full-text search, WAL mode, and Chinese tokenization
 - **Extension Layer**: Optional Chinese word segmentation with cross-directory support
 
@@ -745,6 +749,25 @@ const manualResults = await callTool('search-scratchpads', {
 await callTool('append-scratchpad', {
   id: scratchpad.id,
   content: '\n\n## Additional Findings 補充發現\n\nFrom paper XYZ: 從論文XYZ發現...'
+});
+
+// 6. Get full content using tail-scratchpad (alternative to get-scratchpad)
+const fullContent = await callTool('tail-scratchpad', {
+  id: scratchpad.id,
+  full_content: true  // Returns complete scratchpad content
+});
+
+// 7. Traditional tail mode still works
+const recentContent = await callTool('tail-scratchpad', {
+  id: scratchpad.id,
+  tail_size: { lines: 10 }  // Last 10 lines only
+});
+
+// 8. Full content with output control
+const controlledContent = await callTool('tail-scratchpad', {
+  id: scratchpad.id,
+  full_content: true,
+  include_content: false  // Metadata only, no content
 });
 ```
 

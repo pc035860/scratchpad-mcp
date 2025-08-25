@@ -327,7 +327,7 @@ class ScratchpadMCPServer {
           },
           {
             name: 'tail-scratchpad',
-            description: 'Get tail content from scratchpad - SIMPLIFIED DESIGN',
+            description: 'Get tail content from scratchpad, or full content with full_content=true. Supports flexible content extraction modes.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -368,6 +368,10 @@ class ScratchpadMCPServer {
                 include_content: {
                   type: 'boolean',
                   description: 'Whether to include content in response (default: true)',
+                },
+                full_content: {
+                  type: 'boolean',
+                  description: 'Whether to return full content instead of tail (overrides tail_size). Use this as alternative to get-scratchpad.',
                 },
               },
               required: ['id'],
