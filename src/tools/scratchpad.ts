@@ -10,6 +10,8 @@ import type {
   GetScratchpadResult,
   AppendScratchpadArgs,
   AppendScratchpadResult,
+  TailScratchpadArgs,
+  TailScratchpadResult,
   ListScratchpadsArgs,
   ListScratchpadsResult,
 } from './types.js';
@@ -98,8 +100,13 @@ export const createScratchpadTool = (db: ScratchpadDatabase): ToolHandler<Create
         content: args.content,
       });
 
+      // Smart content control: default to metadata only, full content only if explicitly requested
+      const includeContent = args.include_full_content ?? false;
+
       return {
-        scratchpad: formatScratchpad(scratchpad),
+        scratchpad: formatScratchpad(scratchpad, {
+          include_content: includeContent,
+        }),
         message: `Created scratchpad "${scratchpad.title}" (${scratchpad.size_bytes} bytes) in workflow ${scratchpad.workflow_id}`,
       };
     } catch (error) {
@@ -169,8 +176,13 @@ export const appendScratchpadTool = (db: ScratchpadDatabase): ToolHandler<Append
 
       const appendedBytes = updatedScratchpad.size_bytes - originalScratchpad.size_bytes;
 
+      // Smart content control: default to metadata only, full content only if explicitly requested
+      const includeContent = args.include_full_content ?? false;
+
       return {
-        scratchpad: formatScratchpad(updatedScratchpad),
+        scratchpad: formatScratchpad(updatedScratchpad, {
+          include_content: includeContent,
+        }),
         message: `Appended ${appendedBytes} bytes to scratchpad "${updatedScratchpad.title}" (total: ${updatedScratchpad.size_bytes} bytes)`,
         appended_bytes: appendedBytes,
       };
@@ -229,6 +241,111 @@ export const listScratchpadsTool = (db: ScratchpadDatabase): ToolHandler<ListScr
       };
     } catch (error) {
       throw new Error(`Failed to list scratchpads: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+};
+
+/**
+ * Get tail content from scratchpad (last N lines or chars)
+ */
+export const tailScratchpadTool = (db: ScratchpadDatabase): ToolHandler<TailScratchpadArgs, TailScratchpadResult> => {
+  return async (args: TailScratchpadArgs): Promise<TailScratchpadResult> => {
+    try {
+      const scratchpad = db.getScratchpadById(args.id);
+
+      if (!scratchpad) {
+        return { scratchpad: null };
+      }
+
+      const content = scratchpad.content;
+      const totalLines = content.split('\n').length;
+      
+      // Determine tail extraction method
+      let tailContent: string;
+      let tailLines: number | undefined;
+      let tailChars: number | undefined;
+      
+      if (args.chars !== undefined) {
+        // Extract by character count (overrides lines parameter)
+        const startIndex = Math.max(0, content.length - args.chars);
+        tailContent = content.substring(startIndex);
+        tailChars = tailContent.length;
+        tailLines = tailContent.split('\n').length;
+      } else {
+        // Extract by line count (default: 50)
+        const linesToTake = args.lines ?? 50;
+        const lines = content.split('\n');
+        const startIndex = Math.max(0, lines.length - linesToTake);
+        const extractedLines = lines.slice(startIndex);
+        tailContent = extractedLines.join('\n');
+        tailLines = extractedLines.length;
+        tailChars = tailContent.length;
+      }
+
+      // Create tail scratchpad object with metadata
+      const tailScratchpad = {
+        ...scratchpad,
+        content: tailContent,
+        created_at: formatTimestamp(scratchpad.created_at),
+        updated_at: formatTimestamp(scratchpad.updated_at),
+        is_tail_content: true as const,
+        tail_lines: tailLines,
+        tail_chars: tailChars,
+        total_lines: totalLines,
+      };
+
+      // Apply content control for tail content if needed
+      const formatOptions: {
+        preview_mode?: boolean;
+        max_content_chars?: number;
+        include_content?: boolean;
+      } = {
+        ...(args.preview_mode !== undefined && { preview_mode: args.preview_mode }),
+        ...(args.max_content_chars !== undefined && { max_content_chars: args.max_content_chars }),
+        ...(args.include_content !== undefined && { include_content: args.include_content }),
+      };
+
+      const formattedTail: any = { 
+        ...tailScratchpad,
+      };
+      
+      // Apply format options to tail content if needed
+      if (formatOptions.include_content === false) {
+        formattedTail.content = '';
+        formattedTail.parameter_warning = 'Content excluded due to include_content=false';
+      } else if (formatOptions.preview_mode) {
+        const maxChars = formatOptions.max_content_chars ?? 200;
+        formattedTail.preview_summary = generatePreview(tailContent, maxChars);
+        formattedTail.content = generatePreview(tailContent, maxChars);
+        formattedTail.content_control_applied = `tail + preview_mode with ${maxChars} chars`;
+      } else if (formatOptions.max_content_chars && tailContent.length > formatOptions.max_content_chars) {
+        const originalLength = tailContent.length;
+        formattedTail.content = tailContent.substring(0, formatOptions.max_content_chars) + '...（截斷）';
+        formattedTail.content_truncated = true;
+        formattedTail.original_size = originalLength;
+        formattedTail.content_control_applied = `tail content truncated to ${formatOptions.max_content_chars} chars`;
+      }
+      
+      // Generate informative message
+      let message = `Retrieved tail from scratchpad "${scratchpad.title}"`;
+      if (args.chars !== undefined) {
+        message += ` (last ${tailChars} chars, ${tailLines} lines)`;
+      } else {
+        message += ` (last ${tailLines}/${totalLines} lines, ${tailChars} chars)`;
+      }
+      
+      if (formattedTail.parameter_warning) {
+        message += ` - WARNING: ${formattedTail.parameter_warning}`;
+      } else if (formattedTail.content_control_applied) {
+        message += ` - Content control: ${formattedTail.content_control_applied}`;
+      }
+      
+      return {
+        scratchpad: formattedTail,
+        message,
+      };
+    } catch (error) {
+      throw new Error(`Failed to get tail from scratchpad: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 };

@@ -7,6 +7,7 @@ import type {
   CreateScratchpadArgs,
   GetScratchpadArgs,
   AppendScratchpadArgs,
+  TailScratchpadArgs,
   ListScratchpadsArgs,
   SearchScratchpadsArgs,
   UpdateWorkflowStatusArgs,
@@ -266,6 +267,62 @@ export function validateGetLatestActiveWorkflowArgs(args: unknown): GetLatestAct
       throw new Error('Invalid arguments: project_scope must be a string');
     }
     result.project_scope = obj['project_scope'];
+  }
+  
+  return result;
+}
+
+/**
+ * Validate TailScratchpadArgs
+ */
+export function validateTailScratchpadArgs(args: unknown): TailScratchpadArgs {
+  if (!args || typeof args !== 'object') {
+    throw new Error('Invalid arguments: expected object');
+  }
+
+  const obj = args as Record<string, unknown>;
+  
+  if (typeof obj['id'] !== 'string') {
+    throw new Error('Invalid arguments: id must be a string');
+  }
+  
+  const result: TailScratchpadArgs = {
+    id: obj['id'],
+  };
+  
+  if (obj['lines'] !== undefined) {
+    if (typeof obj['lines'] !== 'number' || !Number.isInteger(obj['lines']) || obj['lines'] < 1) {
+      throw new Error('Invalid arguments: lines must be a positive integer');
+    }
+    result.lines = obj['lines'];
+  }
+  
+  if (obj['chars'] !== undefined) {
+    if (typeof obj['chars'] !== 'number' || !Number.isInteger(obj['chars']) || obj['chars'] < 1) {
+      throw new Error('Invalid arguments: chars must be a positive integer');
+    }
+    result.chars = obj['chars'];
+  }
+  
+  if (obj['max_content_chars'] !== undefined) {
+    if (typeof obj['max_content_chars'] !== 'number' || !Number.isInteger(obj['max_content_chars']) || obj['max_content_chars'] < 1) {
+      throw new Error('Invalid arguments: max_content_chars must be a positive integer');
+    }
+    result.max_content_chars = obj['max_content_chars'];
+  }
+  
+  if (obj['include_content'] !== undefined) {
+    if (typeof obj['include_content'] !== 'boolean') {
+      throw new Error('Invalid arguments: include_content must be a boolean');
+    }
+    result.include_content = obj['include_content'];
+  }
+  
+  if (obj['preview_mode'] !== undefined) {
+    if (typeof obj['preview_mode'] !== 'boolean') {
+      throw new Error('Invalid arguments: preview_mode must be a boolean');
+    }
+    result.preview_mode = obj['preview_mode'];
   }
   
   return result;

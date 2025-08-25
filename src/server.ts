@@ -16,6 +16,7 @@ import {
   createScratchpadTool,
   getScratchpadTool,
   appendScratchpadTool,
+  tailScratchpadTool,
   listScratchpadsTool,
   searchScratchpadsTool,
 } from './tools/index.js';
@@ -24,6 +25,7 @@ import {
   validateCreateScratchpadArgs,
   validateGetScratchpadArgs,
   validateAppendScratchpadArgs,
+  validateTailScratchpadArgs,
   validateListScratchpadsArgs,
   validateSearchScratchpadsArgs,
   validateUpdateWorkflowStatusArgs,
@@ -73,6 +75,7 @@ class ScratchpadMCPServer {
     const createScratchpad = createScratchpadTool(this.db);
     const getScratchpad = getScratchpadTool(this.db);
     const appendScratchpad = appendScratchpadTool(this.db);
+    const tailScratchpad = tailScratchpadTool(this.db);
     const listScratchpads = listScratchpadsTool(this.db);
 
     // Search tools
@@ -123,6 +126,12 @@ class ScratchpadMCPServer {
           case 'append-scratchpad': {
             const validatedArgs = validateAppendScratchpadArgs(args);
             const result = await appendScratchpad(validatedArgs);
+            return createToolResponse(result);
+          }
+
+          case 'tail-scratchpad': {
+            const validatedArgs = validateTailScratchpadArgs(args);
+            const result = await tailScratchpad(validatedArgs);
             return createToolResponse(result);
           }
 
@@ -259,6 +268,10 @@ class ScratchpadMCPServer {
                   type: 'string',
                   description: 'Content of the scratchpad',
                 },
+                include_full_content: {
+                  type: 'boolean',
+                  description: 'Whether to return full content in response (default: false, returns metadata only)',
+                },
               },
               required: ['workflow_id', 'title', 'content'],
             },
@@ -304,8 +317,49 @@ class ScratchpadMCPServer {
                   type: 'string',
                   description: 'Content to append to the scratchpad',
                 },
+                include_full_content: {
+                  type: 'boolean',
+                  description: 'Whether to return full content in response (default: false, returns metadata only)',
+                },
               },
               required: ['id', 'content'],
+            },
+          },
+          {
+            name: 'tail-scratchpad',
+            description: 'Get tail content from scratchpad (last N lines or chars)',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                id: {
+                  type: 'string',
+                  description: 'ID of the scratchpad to get tail from',
+                },
+                lines: {
+                  type: 'number',
+                  description: 'Number of lines to return from the end (default: 50)',
+                  minimum: 1,
+                },
+                chars: {
+                  type: 'number',
+                  description: 'Maximum characters to return (overrides lines if specified)',
+                  minimum: 1,
+                },
+                max_content_chars: {
+                  type: 'number',
+                  description: 'Maximum characters for tail content',
+                  minimum: 1,
+                },
+                include_content: {
+                  type: 'boolean',
+                  description: 'Whether to include content in response',
+                },
+                preview_mode: {
+                  type: 'boolean',
+                  description: 'Preview mode - return truncated content with preview',
+                },
+              },
+              required: ['id'],
             },
           },
           {

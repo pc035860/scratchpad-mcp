@@ -12,12 +12,14 @@ import {
   createScratchpadTool,
   getScratchpadTool,
   appendScratchpadTool,
+  tailScratchpadTool,
   listScratchpadsTool,
   searchScratchpadsTool,
   type CreateWorkflowArgs,
   type CreateScratchpadArgs,
   type GetScratchpadArgs,
   type AppendScratchpadArgs,
+  type TailScratchpadArgs,
   type ListScratchpadsArgs,
   type SearchScratchpadsArgs,
 } from '../src/tools/index.js';
@@ -34,6 +36,7 @@ class MCPToolsTestHelper {
   private createScratchpad: ReturnType<typeof createScratchpadTool>;
   private getScratchpad: ReturnType<typeof getScratchpadTool>;
   private appendScratchpad: ReturnType<typeof appendScratchpadTool>;
+  private tailScratchpad: ReturnType<typeof tailScratchpadTool>;
   private listScratchpads: ReturnType<typeof listScratchpadsTool>;
   private searchScratchpads: ReturnType<typeof searchScratchpadsTool>;
   
@@ -46,6 +49,7 @@ class MCPToolsTestHelper {
     this.createScratchpad = createScratchpadTool(this.db);
     this.getScratchpad = getScratchpadTool(this.db);
     this.appendScratchpad = appendScratchpadTool(this.db);
+    this.tailScratchpad = tailScratchpadTool(this.db);
     this.listScratchpads = listScratchpadsTool(this.db);
     this.searchScratchpads = searchScratchpadsTool(this.db);
   }
@@ -86,6 +90,14 @@ class MCPToolsTestHelper {
   async callAppendScratchpad(args: AppendScratchpadArgs) {
     try {
       return await this.appendScratchpad(args);
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  }
+  
+  async callTailScratchpad(args: TailScratchpadArgs) {
+    try {
+      return await this.tailScratchpad(args);
     } catch (error) {
       return { error: error instanceof Error ? error.message : 'Unknown error' };
     }
@@ -227,6 +239,7 @@ describe('MCP Tools Integration Tests', () => {
           workflow_id: workflowId,
           title: 'Test Scratchpad',
           content: 'This is test content for the scratchpad.',
+          include_full_content: true,
         });
         
         expect(result).not.toHaveProperty('error');
@@ -282,6 +295,7 @@ describe('MCP Tools Integration Tests', () => {
           workflow_id: workflowId,
           title: 'Test Scratchpad for Get',
           content: 'Content for get test',
+          include_full_content: true,
         });
         expect(createResult).not.toHaveProperty('error');
         scratchpadId = createResult.scratchpad.id;
@@ -328,6 +342,7 @@ describe('MCP Tools Integration Tests', () => {
           workflow_id: workflowId,
           title: 'Test Scratchpad for Append',
           content: 'Initial content',
+          include_full_content: true,
         });
         expect(createResult).not.toHaveProperty('error');
         scratchpadId = createResult.scratchpad.id;
@@ -337,6 +352,7 @@ describe('MCP Tools Integration Tests', () => {
         const appendResult = await helper.callAppendScratchpad({
           id: scratchpadId,
           content: '\nAppended content',
+          include_full_content: true,
         });
         
         expect(appendResult).not.toHaveProperty('error');
@@ -383,15 +399,167 @@ describe('MCP Tools Integration Tests', () => {
         await helper.callAppendScratchpad({
           id: scratchpadId,
           content: '\nSecond append',
+          include_full_content: true,
         });
         
         const result = await helper.callAppendScratchpad({
           id: scratchpadId,
           content: '\nThird append',
+          include_full_content: true,
         });
         
         expect(result).not.toHaveProperty('error');
         expect(result.scratchpad.content).toBe('Initial content\nSecond append\nThird append');
+      });
+    });
+
+    describe('tail-scratchpad tool', () => {
+      let scratchpadId: string;
+      const testContent = 'Line 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6\nLine 7\nLine 8\nLine 9\nLine 10';
+
+      beforeEach(async () => {
+        const createResult = await helper.callCreateScratchpad({
+          workflow_id: workflowId,
+          title: 'Test Scratchpad for Tail',
+          content: testContent,
+          include_full_content: true,
+        });
+        expect(createResult).not.toHaveProperty('error');
+        scratchpadId = createResult.scratchpad.id;
+      });
+
+      it('should get tail content by lines (default 50)', async () => {
+        const result = await helper.callTailScratchpad({
+          id: scratchpadId,
+        });
+
+        expect(result).not.toHaveProperty('error');
+        expect(result).toHaveProperty('scratchpad');
+        expect(result.scratchpad).not.toBeNull();
+        expect(result.scratchpad.id).toBe(scratchpadId);
+        expect(result.scratchpad.content).toBe(testContent);
+        expect(result.scratchpad.is_tail_content).toBe(true);
+        expect(result.scratchpad.tail_lines).toBe(10);
+        expect(result.scratchpad.total_lines).toBe(10);
+        expect(result.scratchpad.tail_chars).toBe(testContent.length);
+      });
+
+      it('should get tail content by specific number of lines', async () => {
+        const result = await helper.callTailScratchpad({
+          id: scratchpadId,
+          lines: 3,
+        });
+
+        expect(result).not.toHaveProperty('error');
+        expect(result.scratchpad).not.toBeNull();
+        expect(result.scratchpad.content).toBe('Line 8\nLine 9\nLine 10');
+        expect(result.scratchpad.tail_lines).toBe(3);
+        expect(result.scratchpad.total_lines).toBe(10);
+      });
+
+      it('should get tail content by character count', async () => {
+        const result = await helper.callTailScratchpad({
+          id: scratchpadId,
+          chars: 20,
+        });
+
+        expect(result).not.toHaveProperty('error');
+        expect(result.scratchpad).not.toBeNull();
+        // chars 取最後 20 個字符，實際會取得 "ine 8\nLine 9\nLine 10" (20 字符)
+        expect(result.scratchpad.content).toBe('ine 8\nLine 9\nLine 10');
+        expect(result.scratchpad.tail_chars).toBe(20);
+        expect(result.scratchpad.tail_lines).toBe(3);
+      });
+
+      it('should prioritize chars parameter over lines parameter', async () => {
+        const result = await helper.callTailScratchpad({
+          id: scratchpadId,
+          lines: 5,
+          chars: 10,
+        });
+
+        expect(result).not.toHaveProperty('error');
+        expect(result.scratchpad).not.toBeNull();
+        // chars 取最後 10 個字符，實際會取得 " 9\nLine 10" (10 字符)
+        expect(result.scratchpad.content).toBe(' 9\nLine 10');
+        expect(result.scratchpad.tail_chars).toBe(10);
+        expect(result.scratchpad.tail_lines).toBe(2);
+      });
+
+      it('should handle preview_mode with tail content', async () => {
+        const result = await helper.callTailScratchpad({
+          id: scratchpadId,
+          lines: 5,
+          preview_mode: true,
+          max_content_chars: 10,
+        });
+
+        expect(result).not.toHaveProperty('error');
+        expect(result.scratchpad).not.toBeNull();
+        expect(result.scratchpad.content).toHaveLength(13); // 10 chars + '...'
+        expect(result.scratchpad.content_control_applied).toContain('tail + preview_mode');
+        expect(result.scratchpad.preview_summary).toBeDefined();
+      });
+
+      it('should handle include_content false', async () => {
+        const result = await helper.callTailScratchpad({
+          id: scratchpadId,
+          include_content: false,
+        });
+
+        expect(result).not.toHaveProperty('error');
+        expect(result.scratchpad).not.toBeNull();
+        expect(result.scratchpad.content).toBe('');
+        expect(result.scratchpad.parameter_warning).toContain('include_content=false');
+      });
+
+      it('should handle max_content_chars truncation on tail content', async () => {
+        const result = await helper.callTailScratchpad({
+          id: scratchpadId,
+          lines: 10,
+          max_content_chars: 30,
+        });
+
+        expect(result).not.toHaveProperty('error');
+        expect(result.scratchpad).not.toBeNull();
+        expect(result.scratchpad.content.length).toBeLessThanOrEqual(37); // 30 + '...（截斷）' (7字符)
+        expect(result.scratchpad.content_truncated).toBe(true);
+        expect(result.scratchpad.content_control_applied).toContain('tail content truncated');
+      });
+
+      it('should handle invalid scratchpad id', async () => {
+        const result = await helper.callTailScratchpad({
+          id: 'invalid-scratchpad-id',
+        });
+
+        expect(result).not.toHaveProperty('error');
+        expect(result).toHaveProperty('scratchpad');
+        expect(result.scratchpad).toBeNull();
+      });
+
+      it('should handle edge case with more lines requested than available', async () => {
+        const result = await helper.callTailScratchpad({
+          id: scratchpadId,
+          lines: 100, // More than the 10 lines available
+        });
+
+        expect(result).not.toHaveProperty('error');
+        expect(result.scratchpad).not.toBeNull();
+        expect(result.scratchpad.content).toBe(testContent);
+        expect(result.scratchpad.tail_lines).toBe(10); // Should return all available lines
+        expect(result.scratchpad.total_lines).toBe(10);
+      });
+
+      it('should handle edge case with more chars requested than available', async () => {
+        const result = await helper.callTailScratchpad({
+          id: scratchpadId,
+          chars: 1000, // More than the content length
+        });
+
+        expect(result).not.toHaveProperty('error');
+        expect(result.scratchpad).not.toBeNull();
+        expect(result.scratchpad.content).toBe(testContent);
+        expect(result.scratchpad.tail_chars).toBe(testContent.length);
       });
     });
   });

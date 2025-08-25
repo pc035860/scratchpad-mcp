@@ -136,6 +136,8 @@ export interface CreateScratchpadArgs {
   workflow_id: string;
   title: string;
   content: string;
+  /** Whether to return full content in response (default: false, returns metadata only) */
+  include_full_content?: boolean;
 }
 
 export interface CreateScratchpadResult {
@@ -176,6 +178,8 @@ export interface GetScratchpadResult {
 export interface AppendScratchpadArgs {
   id: string;
   content: string;
+  /** Whether to return full content in response (default: false, returns metadata only) */
+  include_full_content?: boolean;
 }
 
 export interface AppendScratchpadResult {
@@ -288,4 +292,39 @@ export interface UpdateWorkflowStatusResult {
   };
   message: string;
   previous_status: boolean;
+}
+
+// New tail-scratchpad tool types
+export interface TailScratchpadArgs extends Partial<Pick<OutputControlOptions, 'max_content_chars' | 'include_content' | 'preview_mode'>> {
+  id: string;
+  /** Number of lines to return from the end (default: 50) */
+  lines?: number;
+  /** Maximum characters to return (overrides lines if specified) */
+  chars?: number;
+}
+
+export interface TailScratchpadResult {
+  scratchpad: {
+    id: string;
+    workflow_id: string;
+    title: string;
+    content: string; // Tail content only
+    created_at: string; // ISO string
+    updated_at: string; // ISO string
+    size_bytes: number; // Total size of original scratchpad
+    content_truncated?: boolean;
+    original_size?: number;
+    preview_summary?: string;
+    parameter_warning?: string;
+    content_control_applied?: string;
+    /** Indicates this is tail content */
+    is_tail_content: true;
+    /** Number of lines returned */
+    tail_lines?: number;
+    /** Number of characters returned */
+    tail_chars?: number;
+    /** Total lines in original content */
+    total_lines?: number;
+  } | null;
+  message?: string;
 }

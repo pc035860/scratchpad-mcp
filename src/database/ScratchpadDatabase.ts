@@ -173,21 +173,40 @@ export class ScratchpadDatabase {
 
     // Search statements
     if (this.hasFTS5) {
-      this.searchScratchpadsFTS = this.db.prepare(`
-        SELECT 
-          s.id, s.workflow_id, s.title, s.content, s.created_at, s.updated_at, s.size_bytes,
-          w.id as w_id, w.name as w_name, w.description as w_description, 
-          w.created_at as w_created_at, w.updated_at as w_updated_at, 
-          w.scratchpad_count as w_scratchpad_count, w.is_active as w_is_active, w.project_scope as w_project_scope,
-          fts.rank
-        FROM scratchpads_fts fts
-        JOIN scratchpads s ON s.rowid = fts.rowid
-        JOIN workflows w ON s.workflow_id = w.id
-        WHERE scratchpads_fts MATCH ?
-        ${this.hasFTS5 ? 'AND (? IS NULL OR s.workflow_id = ?)' : ''}
-        ORDER BY fts.rank
-        LIMIT ?
-      `);
+      // 根據是否有 simple tokenizer 使用不同的準備語句
+      if (this.hasSimpleTokenizer) {
+        this.searchScratchpadsFTS = this.db.prepare(`
+          SELECT 
+            s.id, s.workflow_id, s.title, s.content, s.created_at, s.updated_at, s.size_bytes,
+            w.id as w_id, w.name as w_name, w.description as w_description, 
+            w.created_at as w_created_at, w.updated_at as w_updated_at, 
+            w.scratchpad_count as w_scratchpad_count, w.is_active as w_is_active, w.project_scope as w_project_scope,
+            fts.rank
+          FROM scratchpads_fts fts
+          JOIN scratchpads s ON s.rowid = fts.rowid
+          JOIN workflows w ON s.workflow_id = w.id
+          WHERE scratchpads_fts MATCH simple_query(?)
+          AND (? IS NULL OR s.workflow_id = ?)
+          ORDER BY fts.rank
+          LIMIT ?
+        `);
+      } else {
+        this.searchScratchpadsFTS = this.db.prepare(`
+          SELECT 
+            s.id, s.workflow_id, s.title, s.content, s.created_at, s.updated_at, s.size_bytes,
+            w.id as w_id, w.name as w_name, w.description as w_description, 
+            w.created_at as w_created_at, w.updated_at as w_updated_at, 
+            w.scratchpad_count as w_scratchpad_count, w.is_active as w_is_active, w.project_scope as w_project_scope,
+            fts.rank
+          FROM scratchpads_fts fts
+          JOIN scratchpads s ON s.rowid = fts.rowid
+          JOIN workflows w ON s.workflow_id = w.id
+          WHERE scratchpads_fts MATCH ?
+          AND (? IS NULL OR s.workflow_id = ?)
+          ORDER BY fts.rank
+          LIMIT ?
+        `);
+      }
     }
 
     this.searchScratchpadsLike = this.db.prepare(`
@@ -210,18 +229,18 @@ export class ScratchpadDatabase {
 
   /**
    * 構建安全的 FTS5 搜尋查詢
-   * 使用欄位限定搜尋避免語法錯誤
+   * 現在直接返回原始查詢，讓 prepared statement 處理參數化
    */
   private buildFTS5Query(query: string): string {
     // 如果有 simple 擴展，使用 simple_query() 函數進行智能查詢
     if (this.hasSimpleTokenizer) {
-      // 轉義單引號以防止 SQL 注入
-      const escaped = query.replace(/'/g, "''");
-      return `simple_query('${escaped}')`;
+      // 直接返回查詢，讓 simple_query(?) 的參數化處理安全問題
+      return query;
     }
     
-    // 降級到基本 FTS5 查詢
-    const escaped = query.replace(/"/g, '""'); // 轉義雙引號
+    // 降級到基本 FTS5 查詢 - 使用安全的參數化格式
+    // 轉義雙引號以防止 FTS5 語法錯誤
+    const escaped = query.replace(/"/g, '""');
     // 在 title 和 content 欄位中搜尋，避免將特殊字符解析為欄位分隔符
     return `title:"${escaped}" OR content:"${escaped}"`;
   }
@@ -638,18 +657,33 @@ export class ScratchpadDatabase {
             rank: number;
           }>;
         } else if (this.searchScratchpadsFTS) {
-          // 使用標準 FTS5 查詢
-          const safeQuery = this.buildFTS5Query(params.query);
-          results = this.searchScratchpadsFTS.all(
-            safeQuery,
-            params.workflow_id ?? null,
-            params.workflow_id ?? null,
-            limit
-          ) as Array<{ 
-            id: string; workflow_id: string; title: string; content: string; created_at: number; updated_at: number; size_bytes: number;
-            w_id: string; w_name: string; w_description: string | null; w_created_at: number; w_updated_at: number; w_scratchpad_count: number; w_is_active: number; w_project_scope: string | null;
-            rank: number;
-          }>;
+          // 使用標準 FTS5 查詢 - 現在安全地直接傳遞參數
+          if (this.hasSimpleTokenizer) {
+            // simple_query(?) 會安全地處理用戶輸入
+            results = this.searchScratchpadsFTS.all(
+              params.query, // 直接傳遞原始查詢
+              params.workflow_id ?? null,
+              params.workflow_id ?? null,
+              limit
+            ) as Array<{ 
+              id: string; workflow_id: string; title: string; content: string; created_at: number; updated_at: number; size_bytes: number;
+              w_id: string; w_name: string; w_description: string | null; w_created_at: number; w_updated_at: number; w_scratchpad_count: number; w_is_active: number; w_project_scope: string | null;
+              rank: number;
+            }>;
+          } else {
+            // 基本 FTS5 查詢 - 需要使用構建的安全查詢
+            const safeQuery = this.buildFTS5Query(params.query);
+            results = this.searchScratchpadsFTS.all(
+              safeQuery,
+              params.workflow_id ?? null,
+              params.workflow_id ?? null,
+              limit
+            ) as Array<{ 
+              id: string; workflow_id: string; title: string; content: string; created_at: number; updated_at: number; size_bytes: number;
+              w_id: string; w_name: string; w_description: string | null; w_created_at: number; w_updated_at: number; w_scratchpad_count: number; w_is_active: number; w_project_scope: string | null;
+              rank: number;
+            }>;
+          }
         } else {
           throw new Error('No FTS search method available');
         }
