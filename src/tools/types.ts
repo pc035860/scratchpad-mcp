@@ -320,8 +320,8 @@ export interface TailScratchpadResult {
     preview_summary?: string;
     parameter_warning?: string;
     content_control_applied?: string;
-    /** Indicates this is tail content */
-    is_tail_content: true;
+    /** Indicates this is tail content (false when full_content=true) */
+    is_tail_content: boolean;
     /** Number of lines returned */
     tail_lines?: number;
     /** Number of characters returned */

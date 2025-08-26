@@ -67,11 +67,20 @@ export function validateCreateScratchpadArgs(args: unknown): CreateScratchpadArg
     throw new Error('Invalid arguments: content must be a string');
   }
 
-  return {
+  const result: CreateScratchpadArgs = {
     workflow_id: obj['workflow_id'],
     title: obj['title'],
     content: obj['content'],
   };
+  
+  if (obj['include_content'] !== undefined) {
+    if (typeof obj['include_content'] !== 'boolean') {
+      throw new Error('Invalid arguments: include_content must be a boolean');
+    }
+    result.include_content = obj['include_content'];
+  }
+
+  return result;
 }
 
 export function validateGetScratchpadArgs(args: unknown): GetScratchpadArgs {
@@ -85,9 +94,32 @@ export function validateGetScratchpadArgs(args: unknown): GetScratchpadArgs {
     throw new Error('Invalid arguments: id must be a string');
   }
 
-  return {
+  const result: GetScratchpadArgs = {
     id: obj['id'],
   };
+  
+  if (obj['max_content_chars'] !== undefined) {
+    if (typeof obj['max_content_chars'] !== 'number' || !Number.isInteger(obj['max_content_chars']) || obj['max_content_chars'] < 1) {
+      throw new Error('Invalid arguments: max_content_chars must be a positive integer');
+    }
+    result.max_content_chars = obj['max_content_chars'];
+  }
+  
+  if (obj['include_content'] !== undefined) {
+    if (typeof obj['include_content'] !== 'boolean') {
+      throw new Error('Invalid arguments: include_content must be a boolean');
+    }
+    result.include_content = obj['include_content'];
+  }
+  
+  if (obj['preview_mode'] !== undefined) {
+    if (typeof obj['preview_mode'] !== 'boolean') {
+      throw new Error('Invalid arguments: preview_mode must be a boolean');
+    }
+    result.preview_mode = obj['preview_mode'];
+  }
+
+  return result;
 }
 
 export function validateAppendScratchpadArgs(args: unknown): AppendScratchpadArgs {
@@ -105,10 +137,19 @@ export function validateAppendScratchpadArgs(args: unknown): AppendScratchpadArg
     throw new Error('Invalid arguments: content must be a string');
   }
 
-  return {
+  const result: AppendScratchpadArgs = {
     id: obj['id'],
     content: obj['content'],
   };
+  
+  if (obj['include_content'] !== undefined) {
+    if (typeof obj['include_content'] !== 'boolean') {
+      throw new Error('Invalid arguments: include_content must be a boolean');
+    }
+    result.include_content = obj['include_content'];
+  }
+
+  return result;
 }
 
 export function validateListScratchpadsArgs(args: unknown): ListScratchpadsArgs {
@@ -138,6 +179,27 @@ export function validateListScratchpadsArgs(args: unknown): ListScratchpadsArgs 
       throw new Error('Invalid arguments: offset must be a non-negative integer');
     }
     result.offset = obj['offset'];
+  }
+  
+  if (obj['max_content_chars'] !== undefined) {
+    if (typeof obj['max_content_chars'] !== 'number' || !Number.isInteger(obj['max_content_chars']) || obj['max_content_chars'] < 1) {
+      throw new Error('Invalid arguments: max_content_chars must be a positive integer');
+    }
+    result.max_content_chars = obj['max_content_chars'];
+  }
+  
+  if (obj['include_content'] !== undefined) {
+    if (typeof obj['include_content'] !== 'boolean') {
+      throw new Error('Invalid arguments: include_content must be a boolean');
+    }
+    result.include_content = obj['include_content'];
+  }
+  
+  if (obj['preview_mode'] !== undefined) {
+    if (typeof obj['preview_mode'] !== 'boolean') {
+      throw new Error('Invalid arguments: preview_mode must be a boolean');
+    }
+    result.preview_mode = obj['preview_mode'];
   }
 
   return result;
@@ -170,6 +232,41 @@ export function validateSearchScratchpadsArgs(args: unknown): SearchScratchpadsA
       throw new Error('Invalid arguments: limit must be a non-negative integer');
     }
     result.limit = obj['limit'];
+  }
+  
+  if (obj['offset'] !== undefined) {
+    if (typeof obj['offset'] !== 'number' || !Number.isInteger(obj['offset']) || obj['offset'] < 0) {
+      throw new Error('Invalid arguments: offset must be a non-negative integer');
+    }
+    result.offset = obj['offset'];
+  }
+  
+  if (obj['max_content_chars'] !== undefined) {
+    if (typeof obj['max_content_chars'] !== 'number' || !Number.isInteger(obj['max_content_chars']) || obj['max_content_chars'] < 1) {
+      throw new Error('Invalid arguments: max_content_chars must be a positive integer');
+    }
+    result.max_content_chars = obj['max_content_chars'];
+  }
+  
+  if (obj['include_content'] !== undefined) {
+    if (typeof obj['include_content'] !== 'boolean') {
+      throw new Error('Invalid arguments: include_content must be a boolean');
+    }
+    result.include_content = obj['include_content'];
+  }
+  
+  if (obj['preview_mode'] !== undefined) {
+    if (typeof obj['preview_mode'] !== 'boolean') {
+      throw new Error('Invalid arguments: preview_mode must be a boolean');
+    }
+    result.preview_mode = obj['preview_mode'];
+  }
+  
+  if (obj['useJieba'] !== undefined) {
+    if (typeof obj['useJieba'] !== 'boolean') {
+      throw new Error('Invalid arguments: useJieba must be a boolean');
+    }
+    result.useJieba = obj['useJieba'];
   }
 
   return result;
@@ -246,6 +343,41 @@ export function validateListWorkflowsArgs(args: unknown): ListWorkflowsArgs {
       throw new Error('Invalid arguments: project_scope must be a string');
     }
     result.project_scope = obj['project_scope'];
+  }
+  
+  if (obj['limit'] !== undefined) {
+    if (typeof obj['limit'] !== 'number' || !Number.isInteger(obj['limit']) || obj['limit'] < 0) {
+      throw new Error('Invalid arguments: limit must be a non-negative integer');
+    }
+    result.limit = obj['limit'];
+  }
+  
+  if (obj['offset'] !== undefined) {
+    if (typeof obj['offset'] !== 'number' || !Number.isInteger(obj['offset']) || obj['offset'] < 0) {
+      throw new Error('Invalid arguments: offset must be a non-negative integer');
+    }
+    result.offset = obj['offset'];
+  }
+  
+  if (obj['max_content_chars'] !== undefined) {
+    if (typeof obj['max_content_chars'] !== 'number' || !Number.isInteger(obj['max_content_chars']) || obj['max_content_chars'] < 1) {
+      throw new Error('Invalid arguments: max_content_chars must be a positive integer');
+    }
+    result.max_content_chars = obj['max_content_chars'];
+  }
+  
+  if (obj['include_content'] !== undefined) {
+    if (typeof obj['include_content'] !== 'boolean') {
+      throw new Error('Invalid arguments: include_content must be a boolean');
+    }
+    result.include_content = obj['include_content'];
+  }
+  
+  if (obj['preview_mode'] !== undefined) {
+    if (typeof obj['preview_mode'] !== 'boolean') {
+      throw new Error('Invalid arguments: preview_mode must be a boolean');
+    }
+    result.preview_mode = obj['preview_mode'];
   }
   
   return result;

@@ -319,7 +319,7 @@ export const tailScratchpadTool = (db: ScratchpadDatabase): ToolHandler<TailScra
         created_at: formatTimestamp(scratchpad.created_at),
         updated_at: formatTimestamp(scratchpad.updated_at),
         size_bytes: scratchpad.size_bytes, // Total size of original scratchpad
-        is_tail_content: !isFullContent as const, // false when full_content=true
+        is_tail_content: !isFullContent, // false when full_content=true
         tail_lines: tailLines,
         tail_chars: tailChars,
         total_lines: totalLines,
