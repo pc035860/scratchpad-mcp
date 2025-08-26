@@ -1,0 +1,51 @@
+<div class="workflow-detail" data-workflow-id="{{workflow.id}}">
+  <div class="workflow-header">
+    <div class="header-top">
+      <a href="/" class="back-btn">← 回到列表</a>
+    </div>
+    
+    <h1 class="workflow-title">📋 {{workflow.name}}</h1>
+    
+    <div class="workflow-meta">
+      <div class="meta-item status-toggle {{workflow.statusClass}}" 
+           title="點擊切換啟用狀態" 
+           data-current-status="{{workflow.is_active}}">
+        <span class="status-icon">{{workflow.statusIcon}}</span>
+        <span class="status-text">{{workflow.statusText}}</span>
+        <span class="edit-hint">點擊編輯</span>
+      </div>
+      <div class="meta-item scope-selector" title="點擊編輯專案範圍">
+        <span class="scope-icon">🏷️</span>
+        <span class="scope-text" data-current-scope="{{workflow.project_scope}}">{{workflow.projectScopeDisplay}}</span>
+        <select class="scope-dropdown" style="display: none;">
+          <option value="">未分類</option>
+          {{projectScopeOptions}}
+        </select>
+        <span class="edit-hint">點擊編輯</span>
+      </div>
+      <div class="meta-item">
+        📅 建立於 {{workflow.createdTime}}
+      </div>
+      <div class="meta-item">
+        🕒 更新於 <span class="updated-time">{{workflow.updatedTime}}</span>
+      </div>
+    </div>
+    
+    {{workflow.descriptionHtml}}
+    
+    <div class="loading-indicator" style="display: none;">
+      <span>更新中...</span>
+    </div>
+  </div>
+
+  <div class="scratchpads-section">
+    <div class="section-header">
+      <h2>📝 Scratchpads ({{scratchpadCount}})</h2>
+      {{scratchpadSearchHtml}}
+    </div>
+    
+    <div class="scratchpads-container" id="scratchpads-container">
+      {{scratchpadItems}}
+    </div>
+  </div>
+</div>

@@ -1,0 +1,177 @@
+/* 程式碼語法高亮 - 支援亮色與暗色主題 */
+
+/* 亮色主題程式碼高亮 */
+.markdown-content pre[class*="language-"] {
+  background: var(--surface) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.markdown-content code[class*="language-"] {
+  background: none !important;
+  color: var(--text) !important;
+}
+
+/* Prism.js 基本樣式覆寫 */
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata {
+  color: #6a737d;
+}
+
+.token.punctuation {
+  color: #586069;
+}
+
+.token.property,
+.token.tag,
+.token.boolean,
+.token.number,
+.token.constant,
+.token.symbol,
+.token.deleted {
+  color: #d73a49;
+}
+
+.token.selector,
+.token.attr-name,
+.token.string,
+.token.char,
+.token.builtin,
+.token.inserted {
+  color: #032f62;
+}
+
+.token.operator,
+.token.entity,
+.token.url,
+.language-css .token.string,
+.style .token.string {
+  color: #d73a49;
+}
+
+.token.atrule,
+.token.attr-value,
+.token.keyword {
+  color: #d73a49;
+}
+
+.token.function,
+.token.class-name {
+  color: #6f42c1;
+}
+
+.token.regex,
+.token.important,
+.token.variable {
+  color: #e36209;
+}
+
+.token.important,
+.token.bold {
+  font-weight: bold;
+}
+
+.token.italic {
+  font-style: italic;
+}
+
+/* 暗色主題程式碼高亮 */
+@media (prefers-color-scheme: dark) {
+  .token.comment,
+  .token.prolog,
+  .token.doctype,
+  .token.cdata {
+    color: #8b949e;
+  }
+
+  .token.punctuation {
+    color: #c9d1d9;
+  }
+
+  .token.property,
+  .token.tag,
+  .token.boolean,
+  .token.number,
+  .token.constant,
+  .token.symbol,
+  .token.deleted {
+    color: #ff7b72;
+  }
+
+  .token.selector,
+  .token.attr-name,
+  .token.string,
+  .token.char,
+  .token.builtin,
+  .token.inserted {
+    color: #a5d6ff;
+  }
+
+  .token.operator,
+  .token.entity,
+  .token.url,
+  .language-css .token.string,
+  .style .token.string {
+    color: #ff7b72;
+  }
+
+  .token.atrule,
+  .token.attr-value,
+  .token.keyword {
+    color: #ff7b72;
+  }
+
+  .token.function,
+  .token.class-name {
+    color: #d2a8ff;
+  }
+
+  .token.regex,
+  .token.important,
+  .token.variable {
+    color: #ffa657;
+  }
+}
+
+/* 行號支援 */
+.line-numbers .line-numbers-rows {
+  border-right: 1px solid var(--border);
+}
+
+.line-numbers-rows > span:before {
+  color: var(--text-secondary);
+}
+
+/* 程式碼區塊特殊樣式 */
+.markdown-content pre.language-bash .token.function {
+  color: var(--primary-color);
+}
+
+.markdown-content pre.language-json .token.property {
+  color: var(--success-color);
+}
+
+.markdown-content pre.language-css .token.selector {
+  color: var(--warning-color);
+}
+
+/* 滾動條樣式 */
+.markdown-content pre::-webkit-scrollbar {
+  height: 8px;
+}
+
+.markdown-content pre::-webkit-scrollbar-track {
+  background: var(--surface);
+}
+
+.markdown-content pre::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+.markdown-content pre::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+}

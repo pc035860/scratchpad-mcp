@@ -1,0 +1,29 @@
+/* 主題配色 - 亮色與暗色模式 */
+
+:root {
+  --primary-color: #2563eb;
+  --secondary-color: #64748b;
+  --success-color: #16a34a;
+  --danger-color: #dc2626;
+  --warning-color: #ca8a04;
+  --background: #ffffff;
+  --surface: #f8fafc;
+  --border: #e2e8f0;
+  --text: #0f172a;
+  --text-secondary: #475569;
+  --shadow: 0 1px 3px rgba(0,0,0,0.1);
+  --radius: 8px;
+  --code-color: chocolate;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0f172a;
+    --surface: #1e293b;
+    --border: #334155;
+    --text: #f1f5f9;
+    --text-secondary: #cbd5e1;
+    --shadow: 0 1px 3px rgba(0,0,0,0.3);
+    --code-color: lightsalmon;
+  }
+}

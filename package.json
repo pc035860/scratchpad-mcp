@@ -16,21 +16,31 @@
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
     "format": "prettier --write \"src/**/*.ts\"",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "serve": "node scripts/serve-workflow/server.js",
+    "serve:dev": "node scripts/serve-workflow/server.js --port 3001 --dev"
   },
-  "keywords": ["mcp", "context", "scratchpad", "claude-code"],
+  "keywords": [
+    "mcp",
+    "context",
+    "scratchpad",
+    "claude-code"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.17.4",
-    "better-sqlite3": "^12.2.0"
+    "better-sqlite3": "^12.2.0",
+    "marked": "^9.0.0",
+    "marked-highlight": "^2.2.2",
+    "prismjs": "^1.29.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.8",
     "@types/node": "^18.19.0",
-    "eslint": "^8.57.0",
     "@typescript-eslint/eslint-plugin": "^6.21.0",
     "@typescript-eslint/parser": "^6.21.0",
+    "eslint": "^8.57.0",
     "prettier": "^3.2.5",
     "tsup": "^8.0.2",
     "typescript": "^5.3.3",

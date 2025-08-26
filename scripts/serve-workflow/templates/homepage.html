@@ -1,0 +1,68 @@
+<div class="homepage">
+  <div class="stats">
+    <div class="stat-item">
+      <span class="stat-value">{{stats.total_workflows}}</span>
+      <span class="stat-label">總 Workflows</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-value">{{stats.total_scratchpads}}</span>
+      <span class="stat-label">總 Scratchpads</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-value">{{stats.active_workflows}}</span>
+      <span class="stat-label">啟用中</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-value">{{stats.total_projects}}</span>
+      <span class="stat-label">專案數</span>
+    </div>
+  </div>
+
+  <div class="filters" id="filters">
+    <div class="filter-row">
+      <input type="text" id="search-input" placeholder="搜尋 workflow 名稱或描述..." class="search-input">
+      <button id="search-btn" class="search-btn">🔍</button>
+    </div>
+    
+    <div class="filter-row">
+      <select id="project-scope-filter" class="filter-select">
+        <option value="">所有專案</option>
+        {{projectScopeOptions}}
+      </select>
+      
+      <select id="status-filter" class="filter-select">
+        <option value="">所有狀態</option>
+        <option value="active">僅啟用中</option>
+        <option value="inactive">僅停用</option>
+      </select>
+      
+      <select id="sort-by" class="filter-select">
+        <option value="updated_desc">最近更新</option>
+        <option value="created_desc">最近建立</option>
+        <option value="name_asc">名稱 A-Z</option>
+        <option value="scratchpad_count_desc">Scratchpad 數量</option>
+      </select>
+      
+      <select id="page-size" class="filter-select">
+        <option value="10">每頁 10 個</option>
+        <option value="20" selected>每頁 20 個</option>
+        <option value="50">每頁 50 個</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="workflow-container">
+    <div id="loading" class="loading" style="display: none;">載入中...</div>
+    <div id="workflow-grid" class="workflow-grid">
+      {{workflowCards}}
+    </div>
+  </div>
+
+  <div class="pagination" id="pagination">
+    <button id="prev-btn" class="pagination-btn" {{prevDisabled}}>← 上一頁</button>
+    <span class="page-info">
+      第 {{pagination.page}} 頁，共 {{pagination.pages}} 頁 (總共 {{pagination.total}} 個 workflows)
+    </span>
+    <button id="next-btn" class="pagination-btn" {{nextDisabled}}>下一頁 →</button>
+  </div>
+</div>

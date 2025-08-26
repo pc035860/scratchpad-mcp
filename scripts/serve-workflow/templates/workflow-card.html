@@ -1,0 +1,26 @@
+<div class="workflow-card" data-workflow-id="{{workflow.id}}">
+  <div class="card-header">
+    <h3 class="card-title">📋 {{workflow.name}}</h3>
+    <div class="card-status {{workflow.statusClass}}">
+      {{workflow.statusText}}
+    </div>
+  </div>
+  
+  {{workflow.descriptionHtml}}
+  
+  <div class="card-metadata">
+    <div class="metadata-item">
+      🏷️ {{workflow.projectScopeDisplay}}
+    </div>
+    <div class="metadata-item">
+      📝 {{workflow.scratchpad_count}} scratchpads
+    </div>
+    <div class="metadata-item">
+      🕒 {{workflow.relativeTime}}
+    </div>
+  </div>
+  
+  <div class="card-actions">
+    <a href="/workflow/{{workflow.id}}" class="view-btn">查看內容</a>
+  </div>
+</div>

@@ -1,0 +1,642 @@
+/* 主要樣式檔案 - Workflow Viewer */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  background: var(--background);
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 1rem 2rem;
+  box-shadow: var(--shadow);
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.header h1 a {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.main {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+/* 統計區塊 */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.stat-item {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  text-align: center;
+}
+
+.stat-value {
+  display: block;
+  font-size: 2rem;
+  font-weight: bold;
+  color: var(--primary-color);
+}
+
+.stat-label {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+/* 過濾器 */
+.filters {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.filter-row {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.filter-row:last-child {
+  margin-bottom: 0;
+}
+
+.search-input {
+  flex: 1;
+  min-width: 200px;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--background);
+  color: var(--text);
+}
+
+.search-btn, .filter-select {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--background);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.search-btn:hover, .filter-select:hover {
+  border-color: var(--primary-color);
+}
+
+/* Workflow 網格 */
+.workflow-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.workflow-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  box-shadow: var(--shadow);
+  transition: all 0.3s ease;
+}
+
+.workflow-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+  gap: 1rem;
+}
+
+.card-title {
+  margin: 0;
+  font-size: 1.1rem;
+  flex: 1;
+}
+
+.card-status {
+  font-size: 0.875rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 12px;
+  white-space: nowrap;
+}
+
+.card-status.active {
+  background: rgba(34, 197, 94, 0.1);
+  color: var(--success-color);
+}
+
+.card-status.inactive {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--danger-color);
+}
+
+.card-description {
+  color: var(--text-secondary);
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+}
+
+.card-metadata {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.metadata-item {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.card-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.view-btn {
+  background: var(--primary-color);
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius);
+  text-decoration: none;
+  font-size: 0.875rem;
+  transition: background-color 0.3s;
+}
+
+.view-btn:hover {
+  background: #1d4ed8;
+}
+
+/* 分頁 */
+.pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.5rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.pagination-btn {
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.pagination-btn:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.pagination-btn:disabled {
+  background: var(--secondary-color);
+  cursor: not-allowed;
+}
+
+.page-info {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+/* Workflow 詳細頁面 */
+.workflow-detail {
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+.workflow-header {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2rem;
+  margin-bottom: 2rem;
+}
+
+.header-top {
+  margin-bottom: 1rem;
+}
+
+.back-btn {
+  color: var(--primary-color);
+  text-decoration: none;
+  font-size: 0.875rem;
+}
+
+.back-btn:hover {
+  text-decoration: underline;
+}
+
+.workflow-title {
+  margin: 0 0 1rem 0;
+  font-size: 1.75rem;
+}
+
+.workflow-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--text-secondary);
+}
+
+.meta-item.status {
+  padding: 0.25rem 0.5rem;
+  border-radius: 12px;
+}
+
+.meta-item.status.active {
+  background: rgba(34, 197, 94, 0.1);
+  color: var(--success-color);
+}
+
+.meta-item.status.inactive {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--danger-color);
+}
+
+/* 可編輯的 meta items */
+.status-toggle, .scope-selector {
+  cursor: pointer;
+  position: relative;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+  background: var(--surface);
+}
+
+.status-toggle:hover, .scope-selector:hover {
+  border-color: var(--primary-color);
+  background: var(--background);
+  transform: translateY(-1px);
+}
+
+.status-toggle.active {
+  background: rgba(34, 197, 94, 0.1);
+  color: var(--success-color);
+}
+
+.status-toggle.inactive {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--danger-color);
+}
+
+.edit-hint {
+  font-size: 0.75rem;
+  opacity: 0;
+  margin-left: 0.5rem;
+  transition: opacity 0.3s ease;
+  color: var(--text-secondary);
+}
+
+.status-toggle:hover .edit-hint,
+.scope-selector:hover .edit-hint {
+  opacity: 1;
+}
+
+.scope-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 0.25rem;
+  padding: 0.5rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  z-index: 100;
+  color: var(--text);
+  min-width: 200px;
+}
+
+.scope-selector {
+  position: relative;
+}
+
+.scope-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.loading-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  margin-top: 1rem;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: var(--radius);
+  color: var(--primary-color);
+  font-size: 0.875rem;
+}
+
+.loading-indicator span::before {
+  content: "⏳ ";
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideOut {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+}
+
+.workflow-description {
+  color: var(--text-secondary);
+  font-style: italic;
+  margin: 0;
+}
+
+/* Scratchpads 區塊 */
+.scratchpads-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2rem;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.section-header h2 {
+  margin: 0;
+}
+
+.scratchpad-search {
+  flex: 1;
+  min-width: 200px;
+  max-width: 300px;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--background);
+  color: var(--text);
+}
+
+.scratchpad-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 2rem;
+  overflow: hidden;
+}
+
+.scratchpad-item:last-child {
+  margin-bottom: 0;
+}
+
+.scratchpad-header {
+  background: var(--background);
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.scratchpad-title {
+  margin: 0;
+  font-size: 1.1rem;
+  flex: 1;
+}
+
+.scratchpad-meta {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.markdown-content {
+  padding: 1.5rem;
+  line-height: 1.7;
+  font-size: .85rem;
+}
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3,
+.markdown-content h4,
+.markdown-content h5,
+.markdown-content h6 {
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+  line-height: 1.3;
+}
+
+.markdown-content h1:first-child,
+.markdown-content h2:first-child,
+.markdown-content h3:first-child {
+  margin-top: 0;
+}
+
+.markdown-content code {
+  background: var(--surface);
+  padding: 0.125rem 0.25rem;
+  border-radius: 4px;
+  font-size: 0.875em;
+  font-family: 'Monaco', 'Consolas', monospace;
+  color: var(--code-color);
+}
+
+.markdown-content pre {
+  background: var(--surface);
+  padding: 1rem;
+  border-radius: var(--radius);
+  overflow-x: auto;
+  border: 1px solid var(--border);
+}
+
+.markdown-content pre code {
+  background: none;
+  padding: 0;
+}
+
+.markdown-content blockquote {
+  border-left: 4px solid var(--primary-color);
+  margin: 1rem 0;
+  padding-left: 1rem;
+  color: var(--text-secondary);
+}
+
+.markdown-content ul,
+.markdown-content ol {
+  padding-left: 1.5rem;
+}
+
+.markdown-content li {
+  margin-bottom: 0.25rem;
+}
+
+.markdown-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+}
+
+.markdown-content th,
+.markdown-content td {
+  border: 1px solid var(--border);
+  padding: 0.5rem;
+  text-align: left;
+}
+
+.markdown-content th {
+  background: var(--surface);
+  font-weight: 600;
+}
+
+/* 錯誤頁面 */
+.error-page {
+  text-align: center;
+  padding: 4rem 2rem;
+}
+
+.error-page h1 {
+  font-size: 2rem;
+  margin-bottom: 1rem;
+  color: var(--danger-color);
+}
+
+.error-page p {
+  color: var(--text-secondary);
+  margin-bottom: 2rem;
+}
+
+/* Loading */
+.loading {
+  text-align: center;
+  padding: 2rem;
+  color: var(--text-secondary);
+}
+
+/* 響應式設計 */
+@media (max-width: 768px) {
+  .main {
+    padding: 1rem;
+  }
+
+  .header {
+    padding: 1rem;
+  }
+
+  .workflow-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .card-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .workflow-meta,
+  .card-metadata {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .pagination {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .filter-row {
+    flex-direction: column;
+  }
+
+  .search-input {
+    min-width: auto;
+  }
+
+  .scratchpad-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .scratchpad-search {
+    max-width: none;
+  }
+}
