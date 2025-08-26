@@ -326,5 +326,12 @@ export function validateTailScratchpadArgs(args: unknown): TailScratchpadArgs {
     result.include_content = obj['include_content'];
   }
   
+  if (obj['full_content'] !== undefined) {
+    if (typeof obj['full_content'] !== 'boolean') {
+      throw new Error('Invalid arguments: full_content must be a boolean');
+    }
+    result.full_content = obj['full_content'];
+  }
+  
   return result;
 }
