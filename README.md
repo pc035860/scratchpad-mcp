@@ -170,6 +170,53 @@ export SCRATCHPAD_DB_PATH="./my-scratchpad.db"
 
 **Remember**: All search functionality works without any extensions installed!
 
+## 🌐 Workflow Web Viewer
+
+A standalone HTTP server for viewing and browsing scratchpad workflows through a web interface.
+
+### Quick Start
+
+```bash
+# Start web viewer (default port 3000)
+npm run serve
+
+# Custom port and development mode  
+npm run serve:dev
+# or
+node scripts/serve-workflow/server.js --port 3001 --dev
+```
+
+### Database Path Configuration
+
+The web viewer supports flexible database path configuration with priority order:
+
+```bash
+# 1. Command line parameter (highest priority)
+node scripts/serve-workflow/server.js --db-path "/path/to/database.db"
+
+# 2. Environment variable
+export SCRATCHPAD_DB_PATH="/path/to/database.db"
+npm run serve
+
+# 3. Default: ./scratchpad.v6.db (lowest priority)
+```
+
+### Features
+
+- **🔍 Search & Filter**: Full-text search across workflows and scratchpads
+- **🎨 Syntax Highlighting**: Prism.js integration with automatic dark/light theme switching  
+- **📱 Responsive Design**: Modern UI with workflow organization and pagination
+- **⚡ Live Updates**: Real-time workflow status and scratchpad management
+
+## 🛠️ Utility Scripts
+
+Additional maintenance and diagnostic tools in the `scripts/` directory:
+
+- **`check-search-mode.cjs`** - Check if system uses FTS5 or LIKE search mode
+- **`fix-database.cjs`** - Repair SQLite WAL mode and FTS5 compatibility issues  
+- **`migrate-to-wal.cjs`** - Safely migrate existing database from DELETE to WAL mode
+- **`install-chinese-support.sh`** - Install jieba tokenizer extension for enhanced Chinese text search
+
 ## 🔗 Claude Code Integration
 
 ### Prerequisites

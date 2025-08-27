@@ -57,6 +57,12 @@ npm run clean                 # Clean build artifacts
 ./dist/server.js             # Run built MCP server
 ```
 
+### Web Viewer
+```bash
+npm run serve                 # Start workflow web viewer (port 3000)
+npm run serve:dev            # Development mode with custom port
+```
+
 ## Architecture & Key Components
 
 ### Core Structure
@@ -68,10 +74,16 @@ src/
 │   ├── ScratchpadDatabase.ts # Core database operations
 │   ├── schema.ts            # SQLite schema + FTS5 setup
 │   └── types.ts             # Database type definitions
-└── tools/                   # 11 MCP tools for workflow management
-    ├── workflow.ts          # create-workflow  
-    ├── scratchpad.ts        # create/get/append/delete scratchpad
-    └── search.ts            # list/search scratchpads
+├── tools/                   # 11 MCP tools for workflow management
+│   ├── workflow.ts          # create-workflow  
+│   ├── scratchpad.ts        # create/get/append/delete scratchpad
+│   └── search.ts            # list/search scratchpads
+└── scripts/                 # Utility tools and web viewer
+    ├── serve-workflow/      # HTTP server for workflow browsing
+    ├── check-search-mode.cjs # FTS5/LIKE mode checker
+    ├── fix-database.cjs     # Database repair tool
+    ├── migrate-to-wal.cjs   # WAL mode migration
+    └── install-chinese-support.sh # Chinese tokenizer installer
 ```
 
 ### Key Components
