@@ -1,6 +1,6 @@
 /**
  * MCP Tools Integration Tests
- * 
+ *
  * Tests all MCP tools directly to ensure proper functionality,
  * parameter validation, and response formatting.
  */
@@ -9,6 +9,8 @@ import { ScratchpadDatabase } from '../src/database/index.js';
 import {
   createWorkflowTool,
   listWorkflowsTool,
+  getLatestActiveWorkflowTool,
+  updateWorkflowStatusTool,
   createScratchpadTool,
   getScratchpadTool,
   appendScratchpadTool,
@@ -16,6 +18,8 @@ import {
   listScratchpadsTool,
   searchScratchpadsTool,
   type CreateWorkflowArgs,
+  type GetLatestActiveWorkflowArgs,
+  type UpdateWorkflowStatusArgs,
   type CreateScratchpadArgs,
   type GetScratchpadArgs,
   type AppendScratchpadArgs,
@@ -29,23 +33,27 @@ import {
  */
 class MCPToolsTestHelper {
   private db: ScratchpadDatabase;
-  
+
   // Tool handlers
   private createWorkflow: ReturnType<typeof createWorkflowTool>;
   private listWorkflows: ReturnType<typeof listWorkflowsTool>;
+  private getLatestActiveWorkflow: ReturnType<typeof getLatestActiveWorkflowTool>;
+  private updateWorkflowStatus: ReturnType<typeof updateWorkflowStatusTool>;
   private createScratchpad: ReturnType<typeof createScratchpadTool>;
   private getScratchpad: ReturnType<typeof getScratchpadTool>;
   private appendScratchpad: ReturnType<typeof appendScratchpadTool>;
   private tailScratchpad: ReturnType<typeof tailScratchpadTool>;
   private listScratchpads: ReturnType<typeof listScratchpadsTool>;
   private searchScratchpads: ReturnType<typeof searchScratchpadsTool>;
-  
+
   constructor() {
     this.db = new ScratchpadDatabase({ filename: ':memory:' });
-    
+
     // Initialize all tool handlers
     this.createWorkflow = createWorkflowTool(this.db);
     this.listWorkflows = listWorkflowsTool(this.db);
+    this.getLatestActiveWorkflow = getLatestActiveWorkflowTool(this.db);
+    this.updateWorkflowStatus = updateWorkflowStatusTool(this.db);
     this.createScratchpad = createScratchpadTool(this.db);
     this.getScratchpad = getScratchpadTool(this.db);
     this.appendScratchpad = appendScratchpadTool(this.db);
@@ -53,7 +61,7 @@ class MCPToolsTestHelper {
     this.listScratchpads = listScratchpadsTool(this.db);
     this.searchScratchpads = searchScratchpadsTool(this.db);
   }
-  
+
   // Tool wrapper methods with error handling
   async callCreateWorkflow(args: CreateWorkflowArgs) {
     try {
@@ -62,7 +70,7 @@ class MCPToolsTestHelper {
       return { error: error instanceof Error ? error.message : 'Unknown error' };
     }
   }
-  
+
   async callListWorkflows() {
     try {
       return await this.listWorkflows({});
@@ -70,7 +78,23 @@ class MCPToolsTestHelper {
       return { error: error instanceof Error ? error.message : 'Unknown error' };
     }
   }
-  
+
+  async callGetLatestActiveWorkflow(args: GetLatestActiveWorkflowArgs) {
+    try {
+      return await this.getLatestActiveWorkflow(args);
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  }
+
+  async callUpdateWorkflowStatus(args: UpdateWorkflowStatusArgs) {
+    try {
+      return await this.updateWorkflowStatus(args);
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  }
+
   async callCreateScratchpad(args: CreateScratchpadArgs) {
     try {
       return await this.createScratchpad(args);
@@ -78,7 +102,7 @@ class MCPToolsTestHelper {
       return { error: error instanceof Error ? error.message : 'Unknown error' };
     }
   }
-  
+
   async callGetScratchpad(args: GetScratchpadArgs) {
     try {
       return await this.getScratchpad(args);
@@ -86,7 +110,7 @@ class MCPToolsTestHelper {
       return { error: error instanceof Error ? error.message : 'Unknown error' };
     }
   }
-  
+
   async callAppendScratchpad(args: AppendScratchpadArgs) {
     try {
       return await this.appendScratchpad(args);
@@ -94,7 +118,7 @@ class MCPToolsTestHelper {
       return { error: error instanceof Error ? error.message : 'Unknown error' };
     }
   }
-  
+
   async callTailScratchpad(args: TailScratchpadArgs) {
     try {
       return await this.tailScratchpad(args);
@@ -102,7 +126,7 @@ class MCPToolsTestHelper {
       return { error: error instanceof Error ? error.message : 'Unknown error' };
     }
   }
-  
+
   async callListScratchpads(args: ListScratchpadsArgs) {
     try {
       return await this.listScratchpads(args);
@@ -110,7 +134,7 @@ class MCPToolsTestHelper {
       return { error: error instanceof Error ? error.message : 'Unknown error' };
     }
   }
-  
+
   async callSearchScratchpads(args: SearchScratchpadsArgs) {
     try {
       return await this.searchScratchpads(args);
@@ -118,11 +142,11 @@ class MCPToolsTestHelper {
       return { error: error instanceof Error ? error.message : 'Unknown error' };
     }
   }
-  
+
   getDatabase(): ScratchpadDatabase {
     return this.db;
   }
-  
+
   close(): void {
     this.db.close();
   }
@@ -146,7 +170,7 @@ describe('MCP Tools Integration Tests', () => {
           name: 'Test Workflow',
           description: 'A test workflow',
         });
-        
+
         expect(result).not.toHaveProperty('error');
         expect(result).toHaveProperty('workflow');
         expect(result).toHaveProperty('message');
@@ -160,7 +184,7 @@ describe('MCP Tools Integration Tests', () => {
         const result = await helper.callCreateWorkflow({
           name: 'Minimal Workflow',
         });
-        
+
         expect(result).not.toHaveProperty('error');
         expect(result.workflow.name).toBe('Minimal Workflow');
         expect(result.workflow.description).toBeNull();
@@ -168,7 +192,7 @@ describe('MCP Tools Integration Tests', () => {
 
       it('should handle missing name parameter', async () => {
         const result = await helper.callCreateWorkflow({} as CreateWorkflowArgs);
-        
+
         expect(result).toHaveProperty('error');
         expect(result.error).toContain('name');
       });
@@ -177,7 +201,7 @@ describe('MCP Tools Integration Tests', () => {
         const result = await helper.callCreateWorkflow({
           name: null as any,
         });
-        
+
         expect(result).toHaveProperty('error');
       });
     });
@@ -185,7 +209,7 @@ describe('MCP Tools Integration Tests', () => {
     describe('list-workflows tool', () => {
       it('should list empty workflows initially', async () => {
         const result = await helper.callListWorkflows();
-        
+
         expect(result).not.toHaveProperty('error');
         expect(result).toHaveProperty('workflows');
         expect(result).toHaveProperty('count');
@@ -197,17 +221,17 @@ describe('MCP Tools Integration Tests', () => {
         // Create some workflows first
         await helper.callCreateWorkflow({ name: 'Workflow 1' });
         await helper.callCreateWorkflow({ name: 'Workflow 2' });
-        
+
         const result = await helper.callListWorkflows();
-        
+
         expect(result).not.toHaveProperty('error');
         expect(result.workflows).toHaveLength(2);
         expect(result.count).toBe(2);
-        
+
         const names = result.workflows.map((w: any) => w.name);
         expect(names).toContain('Workflow 1');
         expect(names).toContain('Workflow 2');
-        
+
         // Verify workflow structure
         for (const workflow of result.workflows) {
           expect(workflow).toHaveProperty('id');
@@ -241,7 +265,7 @@ describe('MCP Tools Integration Tests', () => {
           content: 'This is test content for the scratchpad.',
           include_content: true,
         });
-        
+
         expect(result).not.toHaveProperty('error');
         expect(result).toHaveProperty('scratchpad');
         expect(result).toHaveProperty('message');
@@ -259,7 +283,7 @@ describe('MCP Tools Integration Tests', () => {
           workflow_id: workflowId,
           title: 'Missing Content',
         } as CreateScratchpadArgs);
-        
+
         expect(result).toHaveProperty('error');
       });
 
@@ -269,7 +293,7 @@ describe('MCP Tools Integration Tests', () => {
           title: 'Test Scratchpad',
           content: 'Test content',
         });
-        
+
         expect(result).toHaveProperty('error');
         expect(result.error).toMatch(/workflow|not found|invalid/i);
       });
@@ -281,7 +305,7 @@ describe('MCP Tools Integration Tests', () => {
           title: 'Large Scratchpad',
           content: largeContent,
         });
-        
+
         expect(result).not.toHaveProperty('error');
         expect(result.scratchpad.size_bytes).toBe(largeContent.length);
       });
@@ -305,7 +329,7 @@ describe('MCP Tools Integration Tests', () => {
         const result = await helper.callGetScratchpad({
           id: scratchpadId,
         });
-        
+
         expect(result).not.toHaveProperty('error');
         expect(result).toHaveProperty('scratchpad');
         expect(result.scratchpad).not.toBeNull();
@@ -319,7 +343,7 @@ describe('MCP Tools Integration Tests', () => {
         const result = await helper.callGetScratchpad({
           id: 'invalid-scratchpad-id',
         });
-        
+
         expect(result).not.toHaveProperty('error');
         expect(result).toHaveProperty('scratchpad');
         expect(result.scratchpad).toBeNull();
@@ -327,7 +351,7 @@ describe('MCP Tools Integration Tests', () => {
 
       it('should handle missing id parameter', async () => {
         const result = await helper.callGetScratchpad({} as GetScratchpadArgs);
-        
+
         expect(result).not.toHaveProperty('error');
         expect(result).toHaveProperty('scratchpad');
         expect(result.scratchpad).toBeNull();
@@ -354,17 +378,17 @@ describe('MCP Tools Integration Tests', () => {
           content: '\nAppended content',
           include_content: true,
         });
-        
+
         expect(appendResult).not.toHaveProperty('error');
         expect(appendResult).toHaveProperty('scratchpad');
         expect(appendResult.scratchpad.content).toBe('Initial content\n\n---\n\nAppended content');
         expect(appendResult.scratchpad.size_bytes).toBeGreaterThan(15); // Original size
-        
+
         // Verify by getting the scratchpad
         const getResult = await helper.callGetScratchpad({ id: scratchpadId });
         expect(getResult).not.toHaveProperty('error');
         expect(getResult.scratchpad.content).toBe('Initial content\n\n---\n\nAppended content');
-        
+
         // Verify updated_at changed (allow for same timestamp in fast tests) - now comparing ISO strings
         const updatedAt = new Date(appendResult.scratchpad.updated_at).getTime();
         const createdAt = new Date(appendResult.scratchpad.created_at).getTime();
@@ -376,7 +400,7 @@ describe('MCP Tools Integration Tests', () => {
           id: 'invalid-id',
           content: 'Should not append',
         });
-        
+
         expect(result).toHaveProperty('error');
       });
 
@@ -385,7 +409,7 @@ describe('MCP Tools Integration Tests', () => {
           id: scratchpadId,
           content: undefined as any,
         });
-        
+
         // Append with undefined content might just append empty string or succeed
         // Let's check if this is actually an error condition
         if (result.error) {
@@ -401,21 +425,24 @@ describe('MCP Tools Integration Tests', () => {
           content: '\nSecond append',
           include_content: true,
         });
-        
+
         const result = await helper.callAppendScratchpad({
           id: scratchpadId,
           content: '\nThird append',
           include_content: true,
         });
-        
+
         expect(result).not.toHaveProperty('error');
-        expect(result.scratchpad.content).toBe('Initial content\n\n---\n\nSecond append\n\n---\n\nThird append');
+        expect(result.scratchpad.content).toBe(
+          'Initial content\n\n---\n\nSecond append\n\n---\n\nThird append'
+        );
       });
     });
 
     describe('tail-scratchpad tool', () => {
       let scratchpadId: string;
-      const testContent = 'Line 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6\nLine 7\nLine 8\nLine 9\nLine 10';
+      const testContent =
+        'Line 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6\nLine 7\nLine 8\nLine 9\nLine 10';
 
       beforeEach(async () => {
         const createResult = await helper.callCreateScratchpad({
@@ -622,11 +649,26 @@ describe('MCP Tools Integration Tests', () => {
 
       // Create test scratchpads
       const testScratchpads = [
-        { title: 'JavaScript Notes', content: 'JavaScript is a programming language used for web development' },
-        { title: 'Python Guide', content: 'Python is great for data science and machine learning applications' },
-        { title: 'API Documentation', content: 'REST API endpoints for user management and authentication' },
-        { title: 'React Components', content: 'React functional components with hooks for state management' },
-        { title: 'Database Schema', content: 'SQL database schema design for user accounts and permissions' },
+        {
+          title: 'JavaScript Notes',
+          content: 'JavaScript is a programming language used for web development',
+        },
+        {
+          title: 'Python Guide',
+          content: 'Python is great for data science and machine learning applications',
+        },
+        {
+          title: 'API Documentation',
+          content: 'REST API endpoints for user management and authentication',
+        },
+        {
+          title: 'React Components',
+          content: 'React functional components with hooks for state management',
+        },
+        {
+          title: 'Database Schema',
+          content: 'SQL database schema design for user accounts and permissions',
+        },
       ];
 
       for (const pad of testScratchpads) {
@@ -645,18 +687,18 @@ describe('MCP Tools Integration Tests', () => {
         const result = await helper.callListScratchpads({
           workflow_id: workflowId,
         });
-        
+
         expect(result).not.toHaveProperty('error');
         expect(result).toHaveProperty('scratchpads');
         expect(result).toHaveProperty('count');
         expect(result.scratchpads).toHaveLength(5);
         expect(result.count).toBe(5);
-        
+
         const titles = result.scratchpads.map((s: any) => s.title);
         expect(titles).toContain('JavaScript Notes');
         expect(titles).toContain('Python Guide');
         expect(titles).toContain('API Documentation');
-        
+
         // Verify scratchpad structure
         for (const scratchpad of result.scratchpads) {
           expect(scratchpad).toHaveProperty('id');
@@ -674,7 +716,7 @@ describe('MCP Tools Integration Tests', () => {
           workflow_id: workflowId,
           limit: 2,
         });
-        
+
         expect(result).not.toHaveProperty('error');
         expect(result.scratchpads).toHaveLength(2);
         expect(result.count).toBe(2);
@@ -684,7 +726,7 @@ describe('MCP Tools Integration Tests', () => {
         const result = await helper.callListScratchpads({
           workflow_id: 'invalid-workflow-id',
         });
-        
+
         // Should not error, but return empty list
         expect(result).not.toHaveProperty('error');
         expect(result.scratchpads).toHaveLength(0);
@@ -695,7 +737,7 @@ describe('MCP Tools Integration Tests', () => {
         const result = await helper.callListScratchpads({
           workflow_id: workflowId,
         });
-        
+
         expect(result).not.toHaveProperty('error');
         expect(result).toHaveProperty('scratchpads');
         expect(result).toHaveProperty('count');
@@ -709,14 +751,14 @@ describe('MCP Tools Integration Tests', () => {
         const result = await helper.callSearchScratchpads({
           query: 'programming',
         });
-        
+
         expect(result).not.toHaveProperty('error');
         expect(result).toHaveProperty('results');
         expect(result).toHaveProperty('count');
         expect(result).toHaveProperty('query', 'programming');
         expect(result).toHaveProperty('search_method');
         expect(['fts5', 'like']).toContain(result.search_method);
-        
+
         // Should find JavaScript Notes
         expect(result.results.length).toBeGreaterThan(0);
         const titles = result.results.map((r: any) => r.scratchpad.title);
@@ -728,10 +770,10 @@ describe('MCP Tools Integration Tests', () => {
           query: 'development',
           workflow_id: workflowId,
         });
-        
+
         expect(result).not.toHaveProperty('error');
         expect(result.results.length).toBeGreaterThan(0);
-        
+
         // All results should be from the specified workflow
         for (const searchResult of result.results) {
           expect(searchResult.workflow.id).toBe(workflowId);
@@ -743,7 +785,7 @@ describe('MCP Tools Integration Tests', () => {
           query: 'a', // Broad query to match multiple results
           limit: 2,
         });
-        
+
         expect(result).not.toHaveProperty('error');
         expect(result.results.length).toBeLessThanOrEqual(2);
       });
@@ -752,10 +794,10 @@ describe('MCP Tools Integration Tests', () => {
         const result = await helper.callSearchScratchpads({
           query: 'JavaScript',
         });
-        
+
         expect(result).not.toHaveProperty('error');
         expect(result.results.length).toBeGreaterThan(0);
-        
+
         for (const searchResult of result.results) {
           expect(searchResult).toHaveProperty('snippet');
           expect(searchResult).toHaveProperty('rank');
@@ -768,7 +810,7 @@ describe('MCP Tools Integration Tests', () => {
 
       it('should handle missing query parameter', async () => {
         const result = await helper.callSearchScratchpads({} as SearchScratchpadsArgs);
-        
+
         // Check if search actually fails or returns empty results
         if (result.error) {
           expect(result).toHaveProperty('error');
@@ -783,7 +825,7 @@ describe('MCP Tools Integration Tests', () => {
         const result = await helper.callSearchScratchpads({
           query: 'nonexistent-search-term-xyz-123',
         });
-        
+
         expect(result).not.toHaveProperty('error');
         expect(result.results).toHaveLength(0);
         expect(result.count).toBe(0);
@@ -793,7 +835,7 @@ describe('MCP Tools Integration Tests', () => {
         const result = await helper.callSearchScratchpads({
           query: 'JAVASCRIPT', // Uppercase
         });
-        
+
         expect(result).not.toHaveProperty('error');
         expect(result.results.length).toBeGreaterThan(0);
         const titles = result.results.map((r: any) => r.scratchpad.title);
@@ -804,7 +846,7 @@ describe('MCP Tools Integration Tests', () => {
         const result = await helper.callSearchScratchpads({
           query: 'manage', // Should match "management"
         });
-        
+
         expect(result).not.toHaveProperty('error');
         expect(result.results.length).toBeGreaterThan(0);
       });
@@ -833,7 +875,7 @@ describe('MCP Tools Integration Tests', () => {
       }
 
       const results = await Promise.all(createPromises);
-      
+
       // All should succeed
       for (const result of results) {
         expect(result).not.toHaveProperty('error');
@@ -843,7 +885,7 @@ describe('MCP Tools Integration Tests', () => {
       const listResult = await helper.callListScratchpads({
         workflow_id: workflowId,
       });
-      
+
       expect(listResult).not.toHaveProperty('error');
       expect(listResult.scratchpads).toHaveLength(20);
       expect(listResult.count).toBe(20);
@@ -893,7 +935,7 @@ describe('MCP Tools Integration Tests', () => {
       });
       expect(searchResult).not.toHaveProperty('error');
       expect(searchResult.results.length).toBeGreaterThan(0);
-      
+
       const foundScratchpad = searchResult.results.find(
         (r: any) => r.scratchpad.id === scratchpadId
       );
@@ -929,7 +971,7 @@ describe('MCP Tools Integration Tests', () => {
       }
 
       const appendResults = await Promise.all(appendPromises);
-      
+
       // All should succeed
       for (const result of appendResults) {
         expect(result).not.toHaveProperty('error');

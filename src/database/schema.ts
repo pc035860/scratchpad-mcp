@@ -2,13 +2,17 @@
  * Database schema initialization and migrations
  */
 import type Database from 'better-sqlite3';
+import { assertVersionResult } from './types.js';
 
 export const SCHEMA_VERSION = 3;
 
-export const initializeSchema = (db: Database.Database, tokenizer: string = 'porter unicode61'): void => {
+export const initializeSchema = (
+  db: Database.Database,
+  tokenizer: string = 'porter unicode61'
+): void => {
   // Enable foreign key support
   db.pragma('foreign_keys = ON');
-  
+
   // Create workflows table with all fields including project_scope
   db.exec(`
     CREATE TABLE IF NOT EXISTS workflows (
@@ -106,7 +110,6 @@ export const initializeSchema = (db: Database.Database, tokenizer: string = 'por
           VALUES (NEW.rowid, NEW.id, NEW.workflow_id, NEW.title, NEW.content);
         END
       `);
-
     } catch (error) {
       // FTS5 not available, fall back to basic search
       console.warn('FTS5 not available, falling back to LIKE search:', error);
@@ -133,13 +136,14 @@ export const initializeSchema = (db: Database.Database, tokenizer: string = 'por
  */
 export const migrateSchema = (db: Database.Database): void => {
   let currentVersion = 1;
-  
+
   try {
     const getVersion = db.prepare(`
       SELECT value FROM schema_info WHERE key = ?
     `);
-    const result = getVersion.get('version') as { value: string } | undefined;
-    
+    const rawResult = getVersion.get('version');
+    const result = assertVersionResult(rawResult, 'migrateSchema');
+
     if (result) {
       currentVersion = parseInt(result.value, 10);
     }
@@ -154,8 +158,8 @@ export const migrateSchema = (db: Database.Database): void => {
     try {
       // Check if column already exists
       const tableInfo = db.prepare(`PRAGMA table_info(workflows)`).all() as Array<{ name: string }>;
-      const hasIsActive = tableInfo.some(column => column.name === 'is_active');
-      
+      const hasIsActive = tableInfo.some((column) => column.name === 'is_active');
+
       if (!hasIsActive) {
         db.exec(`ALTER TABLE workflows ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT 1`);
         console.log('✅ Added is_active column to workflows table');
@@ -172,14 +176,16 @@ export const migrateSchema = (db: Database.Database): void => {
     try {
       // Check if column already exists
       const tableInfo = db.prepare(`PRAGMA table_info(workflows)`).all() as Array<{ name: string }>;
-      const hasProjectScope = tableInfo.some(column => column.name === 'project_scope');
-      
+      const hasProjectScope = tableInfo.some((column) => column.name === 'project_scope');
+
       if (!hasProjectScope) {
         db.exec(`ALTER TABLE workflows ADD COLUMN project_scope TEXT DEFAULT NULL`);
         console.log('✅ Added project_scope column to workflows table');
-        
+
         // Create index for project_scope
-        db.exec(`CREATE INDEX IF NOT EXISTS idx_workflows_project_scope ON workflows(project_scope)`);
+        db.exec(
+          `CREATE INDEX IF NOT EXISTS idx_workflows_project_scope ON workflows(project_scope)`
+        );
         console.log('✅ Created index for project_scope column');
       }
     } catch (error) {
@@ -194,12 +200,13 @@ export const checkSchemaVersion = (db: Database.Database): boolean => {
     const getVersion = db.prepare(`
       SELECT value FROM schema_info WHERE key = ?
     `);
-    const result = getVersion.get('version') as { value: string } | undefined;
-    
+    const rawResult = getVersion.get('version');
+    const result = assertVersionResult(rawResult, 'checkSchemaVersion');
+
     if (!result) {
       return false;
     }
-    
+
     const version = parseInt(result.value, 10);
     return version === SCHEMA_VERSION;
   } catch {
@@ -212,7 +219,7 @@ export const hasFTS5Support = (db: Database.Database): boolean => {
   if (process.env['NODE_ENV'] === 'test') {
     return false;
   }
-  
+
   try {
     db.exec(`
       CREATE VIRTUAL TABLE IF NOT EXISTS fts_test 
@@ -237,10 +244,14 @@ export const rebuildFTS5Index = (db: Database.Database): boolean => {
 
   try {
     // 檢查 FTS5 表是否存在
-    const tableExists = db.prepare(`
+    const tableExists = db
+      .prepare(
+        `
       SELECT name FROM sqlite_master 
       WHERE type='table' AND name='scratchpads_fts'
-    `).get();
+    `
+      )
+      .get();
 
     if (tableExists) {
       console.log('重建 FTS5 索引...');
@@ -267,13 +278,19 @@ export const validateFTS5Index = (db: Database.Database): boolean => {
 
   try {
     // 檢查主表和 FTS5 表的記錄數量是否一致
-    const scratchpadCount = db.prepare('SELECT COUNT(*) as count FROM scratchpads').get() as { count: number };
-    const ftsCount = db.prepare('SELECT COUNT(*) as count FROM scratchpads_fts').get() as { count: number };
+    const scratchpadCount = db.prepare('SELECT COUNT(*) as count FROM scratchpads').get() as {
+      count: number;
+    };
+    const ftsCount = db.prepare('SELECT COUNT(*) as count FROM scratchpads_fts').get() as {
+      count: number;
+    };
 
     const isHealthy = scratchpadCount.count === ftsCount.count;
-    
+
     if (!isHealthy) {
-      console.warn(`FTS5 索引不一致: 主表 ${scratchpadCount.count} 記錄, FTS5 表 ${ftsCount.count} 記錄`);
+      console.warn(
+        `FTS5 索引不一致: 主表 ${scratchpadCount.count} 記錄, FTS5 表 ${ftsCount.count} 記錄`
+      );
       // 自動重建索引
       return rebuildFTS5Index(db);
     }

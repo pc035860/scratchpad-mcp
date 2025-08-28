@@ -8,6 +8,7 @@ import type {
   GetScratchpadArgs,
   AppendScratchpadArgs,
   TailScratchpadArgs,
+  ChopScratchpadArgs,
   ListScratchpadsArgs,
   SearchScratchpadsArgs,
   UpdateWorkflowStatusArgs,
@@ -505,6 +506,34 @@ export function validateTailScratchpadArgs(args: unknown): TailScratchpadArgs {
       throw new Error('Invalid arguments: full_content must be a boolean');
     }
     result.full_content = obj['full_content'];
+  }
+
+  return result;
+}
+
+/**
+ * Validate ChopScratchpadArgs
+ */
+export function validateChopScratchpadArgs(args: unknown): ChopScratchpadArgs {
+  if (!args || typeof args !== 'object') {
+    throw new Error('Invalid arguments: expected object');
+  }
+
+  const obj = args as Record<string, unknown>;
+
+  if (typeof obj['id'] !== 'string') {
+    throw new Error('Invalid arguments: id must be a string');
+  }
+
+  const result: ChopScratchpadArgs = {
+    id: obj['id'],
+  };
+
+  if (obj['lines'] !== undefined) {
+    if (typeof obj['lines'] !== 'number' || !Number.isInteger(obj['lines']) || obj['lines'] < 1) {
+      throw new Error('Invalid arguments: lines must be a positive integer');
+    }
+    result.lines = obj['lines'];
   }
 
   return result;

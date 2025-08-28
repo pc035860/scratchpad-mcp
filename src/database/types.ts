@@ -48,6 +48,119 @@ export interface DatabaseConfig {
   timeout?: number;
 }
 
+/**
+ * Type guard functions for runtime type validation
+ * 執行時型別驗證守衛函數，確保資料庫查詢結果的型別安全
+ */
+
+/**
+ * Type guard to validate if an object is a valid Scratchpad
+ */
+export function isScratchpad(obj: unknown): obj is Scratchpad {
+  if (!obj || typeof obj !== 'object') {
+    return false;
+  }
+
+  const candidate = obj as Record<string, unknown>;
+
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.workflow_id === 'string' &&
+    typeof candidate.title === 'string' &&
+    typeof candidate.content === 'string' &&
+    typeof candidate.created_at === 'number' &&
+    typeof candidate.updated_at === 'number' &&
+    typeof candidate.size_bytes === 'number'
+  );
+}
+
+/**
+ * Type guard to validate if an object is a valid WorkflowDbRow
+ */
+export function isWorkflowDbRow(obj: unknown): obj is WorkflowDbRow {
+  if (!obj || typeof obj !== 'object') {
+    return false;
+  }
+
+  const candidate = obj as Record<string, unknown>;
+
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.name === 'string' &&
+    (candidate.description === null || typeof candidate.description === 'string') &&
+    typeof candidate.created_at === 'number' &&
+    typeof candidate.updated_at === 'number' &&
+    typeof candidate.scratchpad_count === 'number' &&
+    typeof candidate.is_active === 'number' && // SQLite boolean as 0/1
+    (candidate.project_scope === null || typeof candidate.project_scope === 'string')
+  );
+}
+
+/**
+ * Type guard to validate schema version query result
+ */
+export function isVersionQueryResult(obj: unknown): obj is { value: string } {
+  return (
+    obj !== null &&
+    typeof obj === 'object' &&
+    typeof (obj as Record<string, unknown>).value === 'string'
+  );
+}
+
+/**
+ * Safe type assertion with runtime validation for Scratchpad
+ * 安全的 Scratchpad 型別斷言，包含執行時驗證
+ */
+export function assertScratchpad(obj: unknown, context?: string): Scratchpad | null {
+  if (obj === undefined || obj === null) {
+    return null;
+  }
+
+  if (isScratchpad(obj)) {
+    return obj;
+  }
+
+  const contextMsg = context ? ` in ${context}` : '';
+  console.warn(`Invalid Scratchpad data received${contextMsg}:`, obj);
+  return null;
+}
+
+/**
+ * Safe type assertion with runtime validation for WorkflowDbRow
+ * 安全的 WorkflowDbRow 型別斷言，包含執行時驗證
+ */
+export function assertWorkflowDbRow(obj: unknown, context?: string): WorkflowDbRow | null {
+  if (obj === undefined || obj === null) {
+    return null;
+  }
+
+  if (isWorkflowDbRow(obj)) {
+    return obj;
+  }
+
+  const contextMsg = context ? ` in ${context}` : '';
+  console.warn(`Invalid WorkflowDbRow data received${contextMsg}:`, obj);
+  return null;
+}
+
+/**
+ * Safe type assertion with runtime validation for version query results
+ * 安全的版本查詢結果型別斷言，包含執行時驗證
+ */
+export function assertVersionResult(obj: unknown, context?: string): { value: string } | null {
+  if (obj === undefined || obj === null) {
+    return null;
+  }
+
+  if (isVersionQueryResult(obj)) {
+    return obj;
+  }
+
+  const contextMsg = context ? ` in ${context}` : '';
+  console.warn(`Invalid version query result${contextMsg}:`, obj);
+  return null;
+}
+
 export interface CreateWorkflowParams {
   name: string;
   description?: string | undefined;
@@ -76,4 +189,9 @@ export interface SearchScratchpadsParams {
   workflow_id?: string | undefined;
   limit?: number;
   useJieba?: boolean; // 可選：是否使用 jieba 結巴分詞搜尋
+}
+
+export interface ChopScratchpadParams {
+  id: string;
+  lines?: number; // 可選：要刪除的行數，默認為 1
 }

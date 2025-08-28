@@ -21,6 +21,21 @@
  * // ❌ CONFLICTING (will show warning)
  * { include_content: false, max_content_chars: 500 }
  * // Result: No content + parameter_warning message
+ *
+ * SMART APPEND EXAMPLES:
+ *
+ * // Traditional: append using scratchpad ID
+ * { id: "scratchpad-abc-123", content: "New content..." }
+ *
+ * // ✨ NEW: append using workflow ID (single scratchpad)
+ * { id: "workflow-def-456", content: "Smart append content..." }
+ * // → Automatically finds and appends to the only scratchpad in workflow
+ *
+ * // ⚠️  Multiple scratchpads scenario
+ * { id: "workflow-with-many", content: "Content..." }
+ * // → Error with helpful list: "Multiple scratchpads found... Please specify:"
+ * //   - "task-context" (scratchpad-id-1)
+ * //   - "progress-log" (scratchpad-id-2)
  */
 
 export interface ToolHandler<TArgs = Record<string, unknown>, TResult = unknown> {
@@ -94,6 +109,17 @@ export interface FormattedScratchpad {
   content_control_applied?: string;
 }
 
+/**
+ * Scratchpad summary information (metadata only, no content)
+ * Used in workflow results to provide quick overview without full content
+ */
+export interface ScratchpadSummary {
+  id: string;
+  title: string;
+  size_bytes: number;
+  updated_at: string; // ISO string
+}
+
 export interface CreateWorkflowArgs {
   name: string;
   description?: string;
@@ -110,6 +136,8 @@ export interface CreateWorkflowResult {
     scratchpad_count: number;
     is_active: boolean;
     project_scope: string | null;
+    /** Enhanced Workflow: Summary of scratchpads in this workflow (optional, new workflows typically have none) */
+    scratchpads_summary?: ScratchpadSummary[];
   };
   message: string;
 }
@@ -128,6 +156,8 @@ export interface ListWorkflowsResult {
     scratchpad_count: number;
     is_active: boolean;
     project_scope: string | null;
+    /** Enhanced Workflow: Summary of scratchpads in this workflow */
+    scratchpads_summary?: ScratchpadSummary[];
   }>;
   count: number;
 }
@@ -179,6 +209,16 @@ export interface GetScratchpadResult {
 }
 
 export interface AppendScratchpadArgs {
+  /**
+   * Scratchpad ID or Workflow ID (Smart Append)
+   *
+   * SMART APPEND BEHAVIOR:
+   * - If ID matches a scratchpad: appends directly to that scratchpad
+   * - If ID matches a workflow with exactly 1 scratchpad: appends to that scratchpad
+   * - If ID matches a workflow with 0 scratchpads: throws error with helpful message
+   * - If ID matches a workflow with multiple scratchpads: throws error listing all options
+   * - If ID matches neither: throws "not found" error
+   */
   id: string;
   content: string;
   /** Whether to return full content in response (default: false, returns metadata only) */
@@ -274,6 +314,8 @@ export interface GetLatestActiveWorkflowResult {
     scratchpad_count: number;
     is_active: boolean;
     project_scope: string | null;
+    /** Enhanced Workflow: Summary of scratchpads in this workflow */
+    scratchpads_summary?: ScratchpadSummary[];
   } | null;
   message: string;
 }
@@ -293,6 +335,8 @@ export interface UpdateWorkflowStatusResult {
     scratchpad_count: number;
     is_active: boolean;
     project_scope: string | null;
+    /** Enhanced Workflow: Summary of scratchpads in this workflow */
+    scratchpads_summary?: ScratchpadSummary[];
   };
   message: string;
   previous_status: boolean;
@@ -349,4 +393,23 @@ export interface ExtractWorkflowInfoResult {
   model_used: string;
   scratchpads_processed: number;
   message?: string;
+}
+
+// Chop Scratchpad tool types
+export interface ChopScratchpadArgs {
+  id: string;
+  lines?: number; // Number of lines to remove from the end (default: 1)
+}
+
+export interface ChopScratchpadResult {
+  scratchpad: {
+    id: string;
+    workflow_id: string;
+    title: string;
+    created_at: string; // ISO string
+    updated_at: string; // ISO string
+    size_bytes: number; // Updated size after chopping
+  };
+  message: string;
+  chopped_lines: number; // Actual number of lines removed
 }

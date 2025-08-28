@@ -14,6 +14,7 @@ import {
   getScratchpadTool,
   appendScratchpadTool,
   tailScratchpadTool,
+  chopScratchpadTool,
   listScratchpadsTool,
   searchScratchpadsTool,
   extractWorkflowInfoTool,
@@ -24,6 +25,7 @@ import {
   validateGetScratchpadArgs,
   validateAppendScratchpadArgs,
   validateTailScratchpadArgs,
+  validateChopScratchpadArgs,
   validateListScratchpadsArgs,
   validateSearchScratchpadsArgs,
   validateUpdateWorkflowStatusArgs,
@@ -75,6 +77,7 @@ class ScratchpadMCPServer {
     const getScratchpad = getScratchpadTool(this.db);
     const appendScratchpad = appendScratchpadTool(this.db);
     const tailScratchpad = tailScratchpadTool(this.db);
+    const chopScratchpad = chopScratchpadTool(this.db);
     const listScratchpads = listScratchpadsTool(this.db);
 
     // Search tools
@@ -134,6 +137,12 @@ class ScratchpadMCPServer {
           case 'tail-scratchpad': {
             const validatedArgs = validateTailScratchpadArgs(args);
             const result = await tailScratchpad(validatedArgs);
+            return createToolResponse(result);
+          }
+
+          case 'chop-scratchpad': {
+            const validatedArgs = validateChopScratchpadArgs(args);
+            const result = await chopScratchpad(validatedArgs);
             return createToolResponse(result);
           }
 
@@ -389,6 +398,26 @@ class ScratchpadMCPServer {
                   type: 'boolean',
                   description:
                     'Whether to return full content instead of tail (overrides tail_size). Use this as alternative to get-scratchpad.',
+                },
+              },
+              required: ['id'],
+            },
+          },
+          {
+            name: 'chop-scratchpad',
+            description:
+              'Remove lines from the end of a scratchpad. Does not return content after completion.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                id: {
+                  type: 'string',
+                  description: 'ID of the scratchpad to chop content from',
+                },
+                lines: {
+                  type: 'number',
+                  description: 'Number of lines to remove from the end (default: 1)',
+                  minimum: 1,
                 },
               },
               required: ['id'],

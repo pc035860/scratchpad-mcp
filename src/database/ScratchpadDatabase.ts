@@ -28,6 +28,7 @@ import type {
   ListScratchpadsParams,
   SearchScratchpadsParams,
 } from './types.js';
+import { assertScratchpad, assertWorkflowDbRow, assertVersionResult } from './types.js';
 
 export class ScratchpadDatabase {
   private db: Database.Database;
@@ -46,19 +47,23 @@ export class ScratchpadDatabase {
       const isInDist = __dirname.includes('/dist');
       const relativePath = isInDist ? '../extensions/libsimple' : '../../extensions/libsimple';
       const extensionPath = path.resolve(__dirname, relativePath);
-      
+
       // 嘗試載入擴展
       this.db.loadExtension(extensionPath);
-      
+
       // 測試 simple 函數是否可用
-      const testResult = this.db.prepare("SELECT simple_query('test') as result").get() as { result: string };
-      
+      const rawTestResult = this.db.prepare("SELECT simple_query('test') as result").get();
+      const testResult = assertVersionResult(rawTestResult, 'loadSimpleTokenizer simple test');
+
       if (testResult?.result) {
         this.hasSimpleTokenizer = true;
         console.log('✅ Simple 中文分詞擴展載入成功');
       }
     } catch (error) {
-      console.warn('⚠️ Simple 擴展載入失敗，將使用預設 tokenizer:', error instanceof Error ? error.message : error);
+      console.warn(
+        '⚠️ Simple 擴展載入失敗，將使用預設 tokenizer:',
+        error instanceof Error ? error.message : error
+      );
       this.hasSimpleTokenizer = false;
     }
   }
@@ -75,10 +80,27 @@ export class ScratchpadDatabase {
     this.db.pragma('synchronous = NORMAL');
     this.db.pragma('cache_size = 1000');
     this.db.pragma('temp_store = memory');
-    
+
     // WAL 模式特定優化
-    this.db.pragma('wal_autocheckpoint = 1000');  // 每 1000 頁自動 checkpoint
-    this.db.pragma('wal_checkpoint(PASSIVE)');    // 啟動時執行被動 checkpoint
+    this.db.pragma('wal_autocheckpoint = 1000'); // 每 1000 頁自動 checkpoint
+
+    // 啟動時執行更可靠的 checkpoint 策略
+    try {
+      this.db.pragma('wal_checkpoint(TRUNCATE)'); // 強制清空 WAL，確保啟動時一致性
+      console.debug('WAL checkpoint (TRUNCATE) completed successfully');
+    } catch (error) {
+      console.warn('TRUNCATE checkpoint failed, trying RESTART:', error);
+      try {
+        this.db.pragma('wal_checkpoint(RESTART)'); // 降級到 RESTART 模式
+        console.debug('WAL checkpoint (RESTART) completed as fallback');
+      } catch (restartError) {
+        console.warn(
+          'RESTART checkpoint also failed, continuing with normal operation:',
+          restartError
+        );
+        // 繼續執行，因為這不是致命錯誤
+      }
+    }
 
     // 嘗試載入 Simple 中文分詞擴展
     this.loadSimpleTokenizer();
@@ -237,7 +259,7 @@ export class ScratchpadDatabase {
       // 直接返回查詢，讓 simple_query(?) 的參數化處理安全問題
       return query;
     }
-    
+
     // 降級到基本 FTS5 查詢 - 使用安全的參數化格式
     // 轉義雙引號以防止 FTS5 語法錯誤
     const escaped = query.replace(/"/g, '""');
@@ -249,9 +271,26 @@ export class ScratchpadDatabase {
    * 使用 jieba_query() 進行結巴分詞搜尋
    * 提供更智慧的中文語意分析和搜尋體驗
    */
-  private searchWithJieba(query: string, workflowId?: string, limit: number = 20): Array<{
-    id: string; workflow_id: string; title: string; content: string; created_at: number; updated_at: number; size_bytes: number;
-    w_id: string; w_name: string; w_description: string | null; w_created_at: number; w_updated_at: number; w_scratchpad_count: number; w_is_active: number; w_project_scope: string | null;
+  private searchWithJieba(
+    query: string,
+    workflowId?: string,
+    limit: number = 20
+  ): Array<{
+    id: string;
+    workflow_id: string;
+    title: string;
+    content: string;
+    created_at: number;
+    updated_at: number;
+    size_bytes: number;
+    w_id: string;
+    w_name: string;
+    w_description: string | null;
+    w_created_at: number;
+    w_updated_at: number;
+    w_scratchpad_count: number;
+    w_is_active: number;
+    w_project_scope: string | null;
     rank: number;
   }> {
     // 使用參數化查詢防止 SQL 注入
@@ -270,11 +309,24 @@ export class ScratchpadDatabase {
       ORDER BY fts.rank
       LIMIT ?
     `;
-    
+
     const stmt = this.db.prepare(sql);
     return stmt.all(query, workflowId, workflowId, limit) as Array<{
-      id: string; workflow_id: string; title: string; content: string; created_at: number; updated_at: number; size_bytes: number;
-      w_id: string; w_name: string; w_description: string | null; w_created_at: number; w_updated_at: number; w_scratchpad_count: number; w_is_active: number; w_project_scope: string | null;
+      id: string;
+      workflow_id: string;
+      title: string;
+      content: string;
+      created_at: number;
+      updated_at: number;
+      size_bytes: number;
+      w_id: string;
+      w_name: string;
+      w_description: string | null;
+      w_created_at: number;
+      w_updated_at: number;
+      w_scratchpad_count: number;
+      w_is_active: number;
+      w_project_scope: string | null;
       rank: number;
     }>;
   }
@@ -285,20 +337,21 @@ export class ScratchpadDatabase {
    */
   private checkFTS5Health(): boolean {
     if (!this.hasFTS5) return false;
-    
+
     try {
       // 嘗試簡單的 FTS5 操作
       this.db.prepare('SELECT COUNT(*) FROM scratchpads_fts LIMIT 1').get();
-      
+
       // 如果使用 simple tokenizer，也要檢查 simple 函數
       if (this.hasSimpleTokenizer) {
         try {
           this.db.prepare("SELECT simple_query('test') as result").get();
-          
+
           // 重新啟用 jieba 檢查，字典路徑已透過符號連結解決
           try {
             // 測試 jieba_query() 是否正常工作 - 使用更安全的測試方式
-            const testResult = this.db.prepare("SELECT jieba_query('test') as result").get() as { result: string } | undefined;
+            const rawTestResult = this.db.prepare("SELECT jieba_query('test') as result").get();
+            const testResult = assertVersionResult(rawTestResult, 'jieba tokenizer test');
             if (testResult?.result) {
               this.hasJiebaTokenizer = true;
               console.log('✅ Jieba 結巴分詞功能完全可用');
@@ -306,7 +359,10 @@ export class ScratchpadDatabase {
               throw new Error('jieba_query returned empty result');
             }
           } catch (jiebaError) {
-            console.warn('⚠️ Jieba 功能不可用，使用 simple_query:', jiebaError instanceof Error ? jiebaError.message : jiebaError);
+            console.warn(
+              '⚠️ Jieba 功能不可用，使用 simple_query:',
+              jiebaError instanceof Error ? jiebaError.message : jiebaError
+            );
             this.hasJiebaTokenizer = false;
           }
         } catch (simpleError) {
@@ -315,7 +371,7 @@ export class ScratchpadDatabase {
           this.hasJiebaTokenizer = false; // Simple 不可用時，jieba 也不可用
         }
       }
-      
+
       return true;
     } catch (error) {
       console.warn('FTS5 健康檢查失敗，切換到 LIKE 搜尋:', error);
@@ -341,7 +397,9 @@ export class ScratchpadDatabase {
   private listScratchpadsByWorkflow!: Database.Statement<[string, number, number]>;
   private countScratchpadsByWorkflow!: Database.Statement<[string]>;
   private searchScratchpadsFTS?: Database.Statement<[string, string | null, string | null, number]>;
-  private searchScratchpadsLike!: Database.Statement<[string, string, string | null, string | null, number]>;
+  private searchScratchpadsLike!: Database.Statement<
+    [string, string, string | null, string | null, number]
+  >;
 
   /**
    * Create a new workflow
@@ -350,7 +408,12 @@ export class ScratchpadDatabase {
     const id = randomUUID();
     const now = Math.floor(Date.now() / 1000);
 
-    this.insertWorkflow.run(id, params.name, params.description ?? null, params.project_scope ?? null);
+    this.insertWorkflow.run(
+      id,
+      params.name,
+      params.description ?? null,
+      params.project_scope ?? null
+    );
 
     return {
       id,
@@ -368,7 +431,8 @@ export class ScratchpadDatabase {
    * Get workflow by ID
    */
   getWorkflowById(id: string): Workflow | null {
-    const result = this.getWorkflow.get(id) as WorkflowDbRow | undefined;
+    const rawResult = this.getWorkflow.get(id);
+    const result = assertWorkflowDbRow(rawResult, 'getWorkflowById');
     if (!result) {
       return null;
     }
@@ -383,7 +447,7 @@ export class ScratchpadDatabase {
    */
   getWorkflows(projectScope?: string): Workflow[] {
     let results: WorkflowDbRow[];
-    
+
     if (projectScope) {
       // Use project-specific query
       const scopedStmt = this.db.prepare(`
@@ -396,8 +460,8 @@ export class ScratchpadDatabase {
       // Use the existing global query
       results = this.listWorkflows.all() as WorkflowDbRow[];
     }
-    
-    return results.map(result => ({
+
+    return results.map((result) => ({
       ...result,
       is_active: Boolean(result.is_active),
     }));
@@ -407,8 +471,8 @@ export class ScratchpadDatabase {
    * Get the latest active workflow
    */
   getLatestActiveWorkflow(projectScope?: string): Workflow | null {
-    let result: WorkflowDbRow | undefined;
-    
+    let result: WorkflowDbRow | null;
+
     if (projectScope) {
       // Use project-specific query
       const scopedStmt = this.db.prepare(`
@@ -417,12 +481,14 @@ export class ScratchpadDatabase {
         ORDER BY updated_at DESC 
         LIMIT 1
       `);
-      result = scopedStmt.get(projectScope) as WorkflowDbRow | undefined;
+      const rawResult = scopedStmt.get(projectScope);
+      result = assertWorkflowDbRow(rawResult, 'getLatestActiveWorkflow with projectScope');
     } else {
       // Use the existing global query
-      result = this.getLatestActiveWorkflowStmt.get() as WorkflowDbRow | undefined;
+      const rawResult = this.getLatestActiveWorkflowStmt.get();
+      result = assertWorkflowDbRow(rawResult, 'getLatestActiveWorkflow global');
     }
-    
+
     if (!result) {
       return null;
     }
@@ -442,7 +508,7 @@ export class ScratchpadDatabase {
     }
 
     this.updateWorkflowActiveStatusStmt.run(isActive ? 1 : 0, id);
-    
+
     return this.getWorkflowById(id);
   }
 
@@ -482,13 +548,7 @@ export class ScratchpadDatabase {
 
     // Use transaction for consistency
     const transaction = this.db.transaction(() => {
-      this.insertScratchpad.run(
-        id,
-        params.workflow_id,
-        params.title,
-        params.content,
-        sizeBytes
-      );
+      this.insertScratchpad.run(id, params.workflow_id, params.title, params.content, sizeBytes);
       this.incrementScratchpadCount.run(params.workflow_id);
       this.updateWorkflowTimestamp.run(params.workflow_id);
     });
@@ -510,8 +570,8 @@ export class ScratchpadDatabase {
    * Get scratchpad by ID
    */
   getScratchpadById(id: string): Scratchpad | null {
-    const result = this.getScratchpad.get(id) as Scratchpad | undefined;
-    return result ?? null;
+    const rawResult = this.getScratchpad.get(id);
+    return assertScratchpad(rawResult, 'getScratchpadById');
   }
 
   /**
@@ -526,14 +586,17 @@ export class ScratchpadDatabase {
     // Check if the workflow is active
     const workflow = this.getWorkflowById(existing.workflow_id);
     if (!workflow || !workflow.is_active) {
-      throw new Error(`Cannot append to scratchpad: workflow is not active: ${existing.workflow_id}`);
+      throw new Error(
+        `Cannot append to scratchpad: workflow is not active: ${existing.workflow_id}`
+      );
     }
 
     // 智慧添加 markdown 分隔模板：兩個空行 + 分隔線 + 一個空行
     const appendTemplate = '\n\n---\n';
-    const newContent = existing.content.trim() === '' 
-      ? params.content  // 首次 append 不需要分隔符
-      : existing.content + appendTemplate + params.content;
+    const newContent =
+      existing.content.trim() === ''
+        ? params.content // 首次 append 不需要分隔符
+        : existing.content + appendTemplate + params.content;
     const newSizeBytes = Buffer.byteLength(newContent, 'utf8');
 
     if (newSizeBytes > this.MAX_SCRATCHPAD_SIZE) {
@@ -556,7 +619,7 @@ export class ScratchpadDatabase {
       if (error instanceof Error && error.message.includes('fts')) {
         console.warn('檢測到 FTS5 相關錯誤，將降級到 LIKE 搜尋:', error.message);
         this.hasFTS5 = false;
-        
+
         // 重試事務（觸發器會自動跳過 FTS5 操作）
         transaction();
       } else {
@@ -574,17 +637,57 @@ export class ScratchpadDatabase {
   }
 
   /**
+   * Update scratchpad content directly (for operations like chop)
+   */
+  updateScratchpadContent(id: string, newContent: string): Scratchpad {
+    const existing = this.getScratchpadById(id);
+    if (!existing) {
+      throw new Error(`Scratchpad not found: ${id}`);
+    }
+
+    // Check if the workflow is active
+    const workflow = this.getWorkflowById(existing.workflow_id);
+    if (!workflow || !workflow.is_active) {
+      throw new Error(`Cannot update scratchpad: workflow is not active: ${existing.workflow_id}`);
+    }
+
+    const newSizeBytes = Buffer.byteLength(newContent, 'utf8');
+
+    // Use transaction for consistency
+    const transaction = this.db.transaction(() => {
+      this.updateScratchpad.run(newContent, newSizeBytes, id);
+      this.updateWorkflowTimestamp.run(existing.workflow_id);
+    });
+
+    try {
+      transaction();
+    } catch (error) {
+      // Handle FTS5 related errors similar to appendToScratchpad
+      if (error instanceof Error && error.message.includes('fts')) {
+        console.warn('檢測到 FTS5 相關錯誤，將降級到 LIKE 搜尋:', error.message);
+        this.hasFTS5 = false;
+        transaction(); // Retry transaction
+      } else {
+        throw error;
+      }
+    }
+
+    const updated = this.getScratchpadById(id);
+    if (!updated) {
+      throw new Error('Failed to update scratchpad');
+    }
+
+    return updated;
+  }
+
+  /**
    * List scratchpads in a workflow
    */
   listScratchpads(params: ListScratchpadsParams): Scratchpad[] {
     const limit = Math.min(params.limit ?? 50, 100);
     const offset = params.offset ?? 0;
 
-    return this.listScratchpadsByWorkflow.all(
-      params.workflow_id,
-      limit,
-      offset
-    ) as Scratchpad[];
+    return this.listScratchpadsByWorkflow.all(params.workflow_id, limit, offset) as Scratchpad[];
   }
 
   /**
@@ -596,9 +699,22 @@ export class ScratchpadDatabase {
     // 檢查 FTS5 健康狀態並嘗試使用 FTS5 搜尋
     if (this.checkFTS5Health()) {
       try {
-        let results: Array<{ 
-          id: string; workflow_id: string; title: string; content: string; created_at: number; updated_at: number; size_bytes: number;
-          w_id: string; w_name: string; w_description: string | null; w_created_at: number; w_updated_at: number; w_scratchpad_count: number; w_is_active: number; w_project_scope: string | null;
+        let results: Array<{
+          id: string;
+          workflow_id: string;
+          title: string;
+          content: string;
+          created_at: number;
+          updated_at: number;
+          size_bytes: number;
+          w_id: string;
+          w_name: string;
+          w_description: string | null;
+          w_created_at: number;
+          w_updated_at: number;
+          w_scratchpad_count: number;
+          w_is_active: number;
+          w_project_scope: string | null;
           rank: number;
         }>;
 
@@ -628,11 +744,29 @@ export class ScratchpadDatabase {
               ORDER BY fts.rank
               LIMIT ?
             `;
-            
+
             const stmt = this.db.prepare(sql);
-            results = stmt.all(params.query, params.workflow_id, params.workflow_id, limit) as Array<{
-              id: string; workflow_id: string; title: string; content: string; created_at: number; updated_at: number; size_bytes: number;
-              w_id: string; w_name: string; w_description: string | null; w_created_at: number; w_updated_at: number; w_scratchpad_count: number; w_is_active: number; w_project_scope: string | null;
+            results = stmt.all(
+              params.query,
+              params.workflow_id,
+              params.workflow_id,
+              limit
+            ) as Array<{
+              id: string;
+              workflow_id: string;
+              title: string;
+              content: string;
+              created_at: number;
+              updated_at: number;
+              size_bytes: number;
+              w_id: string;
+              w_name: string;
+              w_description: string | null;
+              w_created_at: number;
+              w_updated_at: number;
+              w_scratchpad_count: number;
+              w_is_active: number;
+              w_project_scope: string | null;
               rank: number;
             }>;
           }
@@ -653,11 +787,24 @@ export class ScratchpadDatabase {
             ORDER BY fts.rank
             LIMIT ?
           `;
-          
+
           const stmt = this.db.prepare(sql);
           results = stmt.all(params.query, params.workflow_id, params.workflow_id, limit) as Array<{
-            id: string; workflow_id: string; title: string; content: string; created_at: number; updated_at: number; size_bytes: number;
-            w_id: string; w_name: string; w_description: string | null; w_created_at: number; w_updated_at: number; w_scratchpad_count: number; w_is_active: number; w_project_scope: string | null;
+            id: string;
+            workflow_id: string;
+            title: string;
+            content: string;
+            created_at: number;
+            updated_at: number;
+            size_bytes: number;
+            w_id: string;
+            w_name: string;
+            w_description: string | null;
+            w_created_at: number;
+            w_updated_at: number;
+            w_scratchpad_count: number;
+            w_is_active: number;
+            w_project_scope: string | null;
             rank: number;
           }>;
         } else if (this.searchScratchpadsFTS) {
@@ -669,9 +816,22 @@ export class ScratchpadDatabase {
               params.workflow_id ?? null,
               params.workflow_id ?? null,
               limit
-            ) as Array<{ 
-              id: string; workflow_id: string; title: string; content: string; created_at: number; updated_at: number; size_bytes: number;
-              w_id: string; w_name: string; w_description: string | null; w_created_at: number; w_updated_at: number; w_scratchpad_count: number; w_is_active: number; w_project_scope: string | null;
+            ) as Array<{
+              id: string;
+              workflow_id: string;
+              title: string;
+              content: string;
+              created_at: number;
+              updated_at: number;
+              size_bytes: number;
+              w_id: string;
+              w_name: string;
+              w_description: string | null;
+              w_created_at: number;
+              w_updated_at: number;
+              w_scratchpad_count: number;
+              w_is_active: number;
+              w_project_scope: string | null;
               rank: number;
             }>;
           } else {
@@ -682,9 +842,22 @@ export class ScratchpadDatabase {
               params.workflow_id ?? null,
               params.workflow_id ?? null,
               limit
-            ) as Array<{ 
-              id: string; workflow_id: string; title: string; content: string; created_at: number; updated_at: number; size_bytes: number;
-              w_id: string; w_name: string; w_description: string | null; w_created_at: number; w_updated_at: number; w_scratchpad_count: number; w_is_active: number; w_project_scope: string | null;
+            ) as Array<{
+              id: string;
+              workflow_id: string;
+              title: string;
+              content: string;
+              created_at: number;
+              updated_at: number;
+              size_bytes: number;
+              w_id: string;
+              w_name: string;
+              w_description: string | null;
+              w_created_at: number;
+              w_updated_at: number;
+              w_scratchpad_count: number;
+              w_is_active: number;
+              w_project_scope: string | null;
               rank: number;
             }>;
           }
@@ -729,9 +902,22 @@ export class ScratchpadDatabase {
       params.workflow_id ?? null,
       params.workflow_id ?? null,
       limit
-    ) as Array<{ 
-      id: string; workflow_id: string; title: string; content: string; created_at: number; updated_at: number; size_bytes: number;
-      w_id: string; w_name: string; w_description: string | null; w_created_at: number; w_updated_at: number; w_scratchpad_count: number; w_is_active: number; w_project_scope: string | null;
+    ) as Array<{
+      id: string;
+      workflow_id: string;
+      title: string;
+      content: string;
+      created_at: number;
+      updated_at: number;
+      size_bytes: number;
+      w_id: string;
+      w_name: string;
+      w_description: string | null;
+      w_created_at: number;
+      w_updated_at: number;
+      w_scratchpad_count: number;
+      w_is_active: number;
+      w_project_scope: string | null;
       rank: number;
     }>;
 
@@ -780,33 +966,45 @@ export class ScratchpadDatabase {
     ftsIndexHealth: boolean;
     lastCheckpoint?: string;
   } {
-    const workflowCount = this.db.prepare('SELECT COUNT(*) as count FROM workflows').get() as { count: number };
-    const scratchpadCount = this.db.prepare('SELECT COUNT(*) as count FROM scratchpads').get() as { count: number };
-    
+    const workflowCount = this.db.prepare('SELECT COUNT(*) as count FROM workflows').get() as {
+      count: number;
+    };
+    const scratchpadCount = this.db.prepare('SELECT COUNT(*) as count FROM scratchpads').get() as {
+      count: number;
+    };
+
     // WAL 模式監控
     const journalMode = this.db.prepare('PRAGMA journal_mode').get() as { journal_mode: string };
     const isWalMode = journalMode.journal_mode.toLowerCase() === 'wal';
-    
+
     let walSize: number | undefined;
     let ftsIndexHealth = true;
     let lastCheckpoint: string | undefined;
-    
+
     if (isWalMode) {
       try {
         // 檢查 WAL 檔案大小（頁數）
-        const walInfo = this.db.prepare('PRAGMA wal_checkpoint(PASSIVE)').get() as { busy: number; log: number; checkpointed: number };
+        const walInfo = this.db.prepare('PRAGMA wal_checkpoint(PASSIVE)').get() as {
+          busy: number;
+          log: number;
+          checkpointed: number;
+        };
         walSize = walInfo.log; // WAL 檔案中的頁數
         lastCheckpoint = new Date().toISOString();
       } catch (error) {
         console.warn('WAL checkpoint 狀態檢查失敗:', error);
       }
     }
-    
+
     // FTS5 索引健康檢查
     if (this.hasFTS5) {
       try {
-        const mainCount = this.db.prepare('SELECT COUNT(*) as count FROM scratchpads').get() as { count: number };
-        const ftsCount = this.db.prepare('SELECT COUNT(*) as count FROM scratchpads_fts').get() as { count: number };
+        const mainCount = this.db.prepare('SELECT COUNT(*) as count FROM scratchpads').get() as {
+          count: number;
+        };
+        const ftsCount = this.db.prepare('SELECT COUNT(*) as count FROM scratchpads_fts').get() as {
+          count: number;
+        };
         ftsIndexHealth = mainCount.count === ftsCount.count;
       } catch (error) {
         console.warn('FTS5 索引健康檢查失敗:', error);
@@ -832,12 +1030,12 @@ export class ScratchpadDatabase {
    */
   performCheckpoint(): { success: boolean; walPages: number; checkpointedPages: number } {
     try {
-      const result = this.db.prepare('PRAGMA wal_checkpoint(RESTART)').get() as { 
-        busy: number; 
-        log: number; 
-        checkpointed: number 
+      const result = this.db.prepare('PRAGMA wal_checkpoint(RESTART)').get() as {
+        busy: number;
+        log: number;
+        checkpointed: number;
       };
-      
+
       return {
         success: result.busy === 0,
         walPages: result.log,

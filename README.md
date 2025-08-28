@@ -119,6 +119,7 @@ export OPENAI_API_KEY="your-openai-api-key"
 - `get-scratchpad` - Retrieve a scratchpad by ID
 - `append-scratchpad` - Append content to an existing scratchpad
 - `tail-scratchpad` - Tail content, or set `full_content=true` to get full content
+- `chop-scratchpad` - Remove lines from the end of a scratchpad (reverse of tail)
 - `list-scratchpads` - List scratchpads in a workflow
 - `search-scratchpads` - Full-text search (with intelligent Chinese tokenization)
 - `extract-workflow-info` - Extract specific information from workflows using OpenAI models
@@ -438,6 +439,17 @@ Tail content, or return full content with `full_content=true`.
 
 Parameter priority: `full_content` > `tail_size` > default (50 lines)
 
+#### `chop-scratchpad`
+
+Remove lines from the end of a scratchpad. Does not return content after completion.
+
+```typescript
+{
+  id: string;         // required - scratchpad ID
+  lines?: number;     // optional - number of lines to remove from end (default: 1)
+}
+```
+
 #### `list-scratchpads`
 
 List scratchpads with pagination and content control.
@@ -626,7 +638,7 @@ extensions/
 ### Testing Strategy
 
 - Database layer: CRUD, FTS5, error and edge cases, Chinese tokenization
-- MCP tools integration: 11 tools parameter validation, scenarios, protocol compliance
+- MCP tools integration: 12 tools parameter validation, scenarios, protocol compliance
 - Performance: FTS5 <100ms, 1MB content, concurrent access, tokenization performance
 - Project scope: workflow isolation, cross-project restrictions
 
@@ -673,7 +685,7 @@ Benefits: stable working directory, proper extension/dictionary loading, DB path
 ### Architecture
 
 - Server: MCP over stdio
-- Tools: 11 core tools with comprehensive parameter validation
+- Tools: 12 core tools with comprehensive parameter validation
 - Database: SQLite with FTS5 full-text search, WAL mode, optional Chinese tokenization
 - Extension layer: optional Chinese word segmentation with cross-directory support
 

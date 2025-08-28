@@ -80,9 +80,9 @@ src/
 │   ├── ScratchpadDatabase.ts # Core database operations
 │   ├── schema.ts            # SQLite schema + FTS5 setup
 │   └── types.ts             # Database type definitions
-├── tools/                   # 11 MCP tools for workflow management
+├── tools/                   # 12 MCP tools for workflow management
 │   ├── workflow.ts          # create-workflow
-│   ├── scratchpad.ts        # create/get/append/delete scratchpad
+│   ├── scratchpad.ts        # create/get/append/chop/delete scratchpad
 │   └── search.ts            # list/search scratchpads
 └── scripts/                 # Utility tools and web viewer
     ├── serve-workflow/      # HTTP server for workflow browsing
@@ -95,7 +95,7 @@ src/
 ### Key Components
 
 - **Database**: SQLite with FTS5 full-text search, WAL mode for performance
-- **MCP Tools**: 11 tools for workflow and scratchpad management
+- **MCP Tools**: 12 tools for workflow and scratchpad management
 - **Server Helpers**: Type-safe parameter validation for all MCP operations
 - **AI Analysis**: GPT-5 powered workflow information extraction with configurable reasoning levels
 
