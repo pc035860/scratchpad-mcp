@@ -529,7 +529,11 @@ export class ScratchpadDatabase {
       throw new Error(`Cannot append to scratchpad: workflow is not active: ${existing.workflow_id}`);
     }
 
-    const newContent = existing.content + params.content;
+    // 智慧添加 markdown 分隔模板：兩個空行 + 分隔線 + 一個空行
+    const appendTemplate = '\n\n---\n';
+    const newContent = existing.content.trim() === '' 
+      ? params.content  // 首次 append 不需要分隔符
+      : existing.content + appendTemplate + params.content;
     const newSizeBytes = Buffer.byteLength(newContent, 'utf8');
 
     if (newSizeBytes > this.MAX_SCRATCHPAD_SIZE) {

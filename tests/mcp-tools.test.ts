@@ -357,13 +357,13 @@ describe('MCP Tools Integration Tests', () => {
         
         expect(appendResult).not.toHaveProperty('error');
         expect(appendResult).toHaveProperty('scratchpad');
-        expect(appendResult.scratchpad.content).toBe('Initial content\nAppended content');
+        expect(appendResult.scratchpad.content).toBe('Initial content\n\n---\n\nAppended content');
         expect(appendResult.scratchpad.size_bytes).toBeGreaterThan(15); // Original size
         
         // Verify by getting the scratchpad
         const getResult = await helper.callGetScratchpad({ id: scratchpadId });
         expect(getResult).not.toHaveProperty('error');
-        expect(getResult.scratchpad.content).toBe('Initial content\nAppended content');
+        expect(getResult.scratchpad.content).toBe('Initial content\n\n---\n\nAppended content');
         
         // Verify updated_at changed (allow for same timestamp in fast tests) - now comparing ISO strings
         const updatedAt = new Date(appendResult.scratchpad.updated_at).getTime();
@@ -409,7 +409,7 @@ describe('MCP Tools Integration Tests', () => {
         });
         
         expect(result).not.toHaveProperty('error');
-        expect(result.scratchpad.content).toBe('Initial content\nSecond append\nThird append');
+        expect(result.scratchpad.content).toBe('Initial content\n\n---\n\nSecond append\n\n---\n\nThird append');
       });
     });
 
@@ -885,7 +885,7 @@ describe('MCP Tools Integration Tests', () => {
         id: scratchpadId,
       });
       expect(getResult2).not.toHaveProperty('error');
-      expect(getResult2.scratchpad.content).toBe('Original content\nAdded content');
+      expect(getResult2.scratchpad.content).toBe('Original content\n\n---\n\nAdded content');
 
       // Search should also reflect changes
       const searchResult = await helper.callSearchScratchpads({
