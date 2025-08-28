@@ -302,10 +302,13 @@ Phase 3: Export functionality
 
       await helper['extractWorkflowInfo'](args);
 
-      expect(helper['mockOpenAI'].responses.create).toHaveBeenCalledWith({
-        model: 'gpt-4o',
-        input: expect.stringContaining('Extract features'),
-      });
+      expect(helper['mockOpenAI'].responses.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model: 'gpt-4o',
+          instructions: expect.stringContaining('expert workflow analyzer'),
+          input: expect.stringContaining('Extract features'),
+        })
+      );
     });
 
     it('should format scratchpad content correctly', async () => {

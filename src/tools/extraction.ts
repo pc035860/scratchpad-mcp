@@ -15,21 +15,31 @@ const formatTimestamp = (unixTimestamp: number): string => {
 };
 
 /**
- * Combine all scratchpad content into a structured context string
+ * Combine all scratchpad content into a structured context string optimized for append-based workflows
  */
 const buildWorkflowContext = (scratchpads: Scratchpad[]): string => {
   if (scratchpads.length === 0) {
     return 'No scratchpads found in this workflow.';
   }
 
-  let context = `Workflow contains ${scratchpads.length} scratchpad(s):\n\n`;
+  // Sort scratchpads by update time (most recent last) to emphasize temporal flow
+  const sortedScratchpads = [...scratchpads].sort((a, b) => a.updated_at - b.updated_at);
+  
+  let context = `Workflow contains ${scratchpads.length} scratchpad(s) arranged chronologically by last update:\n\n`;
 
-  scratchpads.forEach((scratchpad, index) => {
+  sortedScratchpads.forEach((scratchpad, index) => {
     context += `--- Scratchpad ${index + 1}: ${scratchpad.title} ---\n`;
     context += `Created: ${formatTimestamp(scratchpad.created_at)}\n`;
-    context += `Updated: ${formatTimestamp(scratchpad.updated_at)}\n`;
-    context += `Size: ${scratchpad.size_bytes} bytes\n\n`;
-    context += `Content:\n${scratchpad.content}\n\n`;
+    context += `Last Updated: ${formatTimestamp(scratchpad.updated_at)}\n`;
+    context += `Size: ${scratchpad.size_bytes} bytes (append-based growth)\n`;
+    
+    // Calculate time since creation to indicate append activity
+    const daysSinceCreation = Math.floor((scratchpad.updated_at - scratchpad.created_at) / (24 * 60 * 60));
+    if (daysSinceCreation > 0) {
+      context += `Active Duration: ${daysSinceCreation} day(s) of append activity\n`;
+    }
+    
+    context += `\nContent (chronological append order, most recent at bottom):\n${scratchpad.content}\n\n`;
     context += `--- End of ${scratchpad.title} ---\n\n`;
   });
 
@@ -72,25 +82,33 @@ export const extractWorkflowInfoTool = (
       const client = getOpenAIClient();
       const model = args.model || 'gpt-5-nano';
 
-      // Create extraction instructions for Response API using GPT-5 best practices
-      const extractionInstructions = `<analysis_framework>
-<role>Expert workflow analyzer specializing in development project analysis</role>
+      // Create append-aware extraction framework for Response API using GPT-5 best practices
+      const analysisFramework = `<analysis_framework>
 <core_objectives>
-- Extract precise information from workflow scratchpads with zero hallucination
-- Provide comprehensive, evidence-based analysis with detailed findings
-- Reference specific scratchpad content to support all conclusions
+- Extract precise information from append-based workflow scratchpads with zero hallucination
+- Provide comprehensive, evidence-based analysis emphasizing temporal evolution and latest status
+- Reference specific scratchpad content with attention to chronological development
 - Maintain strict adherence to provided workflow content only
 </core_objectives>
+<append_aware_principles>
+- Prioritize the most recent content and updates, as scratchpads grow over time through appends
+- Identify and integrate related information across different timestamps within scratchpads
+- Distinguish between completed tasks, current work-in-progress, and planned future work
+- Track the evolution of decisions, implementations, and problem-solving approaches
+- Handle potential duplicated or superseded information by focusing on the latest developments
+- When conflicting information appears, give precedence to more recent entries unless explicitly noted otherwise
+</append_aware_principles>
 <analysis_principles>
 - Base all findings strictly on provided scratchpad content
-- Include specific references to scratchpad titles and sections
+- Include specific references to scratchpad titles and relevant sections with temporal context
 - Provide detailed, comprehensive responses without length constraints
 - When information is unavailable, explicitly state "Not found in provided workflow content"
 - Structure findings with clear headings, evidence, and logical flow
+- Highlight status changes and progress evolution throughout the workflow timeline
 </analysis_principles>
 </analysis_framework>`;
 
-      const inputText = `${extractionInstructions}
+      const inputText = `${analysisFramework}
 
 <workflow_analysis>
 <workflow_context>
@@ -102,19 +120,25 @@ ${args.extraction_prompt}
 </extraction_request>
 
 <output_requirements>
-- Analyze the workflow content comprehensively and extract the requested information
+- Analyze the workflow content comprehensively with temporal awareness and extract the requested information
 - Base all analysis strictly on the provided scratchpad content above
-- Include specific references to scratchpad titles and relevant sections
-- Provide detailed, structured responses with clear headings and evidence
+- Prioritize recent developments and current status over historical entries when relevant
+- Include specific references to scratchpad titles and relevant sections with temporal context
+- Identify and clearly distinguish between: completed work, current progress, blocked items, and future plans
+- Integrate related information across scratchpads to provide a cohesive understanding of workflow evolution
+- When encountering duplicate or conflicting information, synthesize based on recency and context
+- Provide detailed, structured responses with clear headings, temporal indicators, and evidence
 - If specific information is not available in the workflow content, explicitly state this
 - Structure your response with appropriate headings, bullet points, and clear organization
-- Support all findings with direct references to the scratchpad content
+- Support all findings with direct references to the scratchpad content and timestamps where available
+- Highlight significant status changes, decision evolutions, and implementation milestones
 </output_requirements>
 </workflow_analysis>`;
 
-      // Use Response API with model-specific parameters
+      // Use Response API with model-specific parameters and instructions
       const apiParams: any = {
         model: model,
+        instructions: 'You are an expert workflow analyzer specializing in development project analysis. Focus on extracting precise information from workflow scratchpads with comprehensive, evidence-based analysis.',
         input: inputText,
       };
 
