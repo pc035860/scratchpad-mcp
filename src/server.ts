@@ -3,10 +3,7 @@
  */
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from '@modelcontextprotocol/sdk/types.js';
+import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { ScratchpadDatabase } from './database/index.js';
 import {
   createWorkflowTool,
@@ -19,6 +16,7 @@ import {
   tailScratchpadTool,
   listScratchpadsTool,
   searchScratchpadsTool,
+  extractWorkflowInfoTool,
 } from './tools/index.js';
 import {
   validateCreateWorkflowArgs,
@@ -31,6 +29,7 @@ import {
   validateUpdateWorkflowStatusArgs,
   validateListWorkflowsArgs,
   validateGetLatestActiveWorkflowArgs,
+  validateExtractWorkflowInfoArgs,
   handleToolError,
   createToolResponse,
 } from './server-helpers.js';
@@ -80,6 +79,9 @@ class ScratchpadMCPServer {
 
     // Search tools
     const searchScratchpads = searchScratchpadsTool(this.db);
+
+    // GPT-5 extraction tools
+    const extractWorkflowInfo = extractWorkflowInfoTool(this.db);
 
     // Register tool handlers
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
@@ -144,6 +146,12 @@ class ScratchpadMCPServer {
           case 'search-scratchpads': {
             const validatedArgs = validateSearchScratchpadsArgs(args);
             const result = await searchScratchpads(validatedArgs);
+            return createToolResponse(result);
+          }
+
+          case 'extract-workflow-info': {
+            const validatedArgs = validateExtractWorkflowInfoArgs(args);
+            const result = await extractWorkflowInfo(validatedArgs);
             return createToolResponse(result);
           }
 
@@ -234,7 +242,8 @@ class ScratchpadMCPServer {
           },
           {
             name: 'update-workflow-status',
-            description: 'Activate or deactivate a workflow. Only active workflows can have scratchpads created or modified.',
+            description:
+              'Activate or deactivate a workflow. Only active workflows can have scratchpads created or modified.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -270,7 +279,8 @@ class ScratchpadMCPServer {
                 },
                 include_content: {
                   type: 'boolean',
-                  description: 'Whether to return full content in response (default: false, returns metadata only)',
+                  description:
+                    'Whether to return full content in response (default: false, returns metadata only)',
                 },
               },
               required: ['workflow_id', 'title', 'content'],
@@ -278,7 +288,8 @@ class ScratchpadMCPServer {
           },
           {
             name: 'get-scratchpad',
-            description: 'Retrieve a scratchpad by its ID. Use preview_mode for quick overview, max_content_chars to limit size, or include_content=false for metadata only.',
+            description:
+              'Retrieve a scratchpad by its ID. Use preview_mode for quick overview, max_content_chars to limit size, or include_content=false for metadata only.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -288,16 +299,19 @@ class ScratchpadMCPServer {
                 },
                 preview_mode: {
                   type: 'boolean',
-                  description: 'Preview mode - returns ~200 chars with smart truncation. Takes precedence over max_content_chars.',
+                  description:
+                    'Preview mode - returns ~200 chars with smart truncation. Takes precedence over max_content_chars.',
                 },
                 max_content_chars: {
                   type: 'number',
-                  description: 'Maximum characters limit (default: 2000). Only applies when include_content is not false.',
+                  description:
+                    'Maximum characters limit (default: 2000). Only applies when include_content is not false.',
                   minimum: 10,
                 },
                 include_content: {
                   type: 'boolean',
-                  description: 'Whether to include content in response. false=metadata only (overrides other content options), true=include content.',
+                  description:
+                    'Whether to include content in response. false=metadata only (overrides other content options), true=include content.',
                 },
               },
               required: ['id'],
@@ -319,7 +333,8 @@ class ScratchpadMCPServer {
                 },
                 include_content: {
                   type: 'boolean',
-                  description: 'Whether to return full content in response (default: false, returns metadata only)',
+                  description:
+                    'Whether to return full content in response (default: false, returns metadata only)',
                 },
               },
               required: ['id', 'content'],
@@ -327,7 +342,8 @@ class ScratchpadMCPServer {
           },
           {
             name: 'tail-scratchpad',
-            description: 'Get tail content from scratchpad, or full content with full_content=true. Supports flexible content extraction modes.',
+            description:
+              'Get tail content from scratchpad, or full content with full_content=true. Supports flexible content extraction modes.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -371,7 +387,8 @@ class ScratchpadMCPServer {
                 },
                 full_content: {
                   type: 'boolean',
-                  description: 'Whether to return full content instead of tail (overrides tail_size). Use this as alternative to get-scratchpad.',
+                  description:
+                    'Whether to return full content instead of tail (overrides tail_size). Use this as alternative to get-scratchpad.',
                 },
               },
               required: ['id'],
@@ -379,7 +396,8 @@ class ScratchpadMCPServer {
           },
           {
             name: 'list-scratchpads',
-            description: 'List scratchpads in a workflow. Options: preview_mode (quick overview), max_content_chars (size limit), include_content=false (metadata only). Priority: include_content > preview_mode > max_content_chars.',
+            description:
+              'List scratchpads in a workflow. Options: preview_mode (quick overview), max_content_chars (size limit), include_content=false (metadata only). Priority: include_content > preview_mode > max_content_chars.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -417,7 +435,8 @@ class ScratchpadMCPServer {
           },
           {
             name: 'search-scratchpads',
-            description: 'Search for scratchpads using full-text search with FTS5 or LIKE fallback. Content control same as list-scratchpads: include_content > preview_mode > max_content_chars.',
+            description:
+              'Search for scratchpads using full-text search with FTS5 or LIKE fallback. Content control same as list-scratchpads: include_content > preview_mode > max_content_chars.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -459,6 +478,33 @@ class ScratchpadMCPServer {
                 },
               },
               required: ['query'],
+            },
+          },
+          {
+            name: 'extract-workflow-info',
+            description: 'Extract specific information from a workflow using OpenAI model',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                workflow_id: {
+                  type: 'string',
+                  description: 'ID of the workflow to extract information from',
+                },
+                extraction_prompt: {
+                  type: 'string',
+                  description: 'Specific prompt describing what information to extract',
+                },
+                model: {
+                  type: 'string',
+                  description: 'OpenAI model to use (default: gpt-5-nano)',
+                },
+                reasoning_effort: {
+                  type: 'string',
+                  description: 'Reasoning effort level for GPT-5 models (default: medium)',
+                  enum: ['minimal', 'low', 'medium', 'high'],
+                },
+              },
+              required: ['workflow_id', 'extraction_prompt'],
             },
           },
         ],

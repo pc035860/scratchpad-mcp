@@ -33,6 +33,7 @@
     "better-sqlite3": "^12.2.0",
     "marked": "^9.0.0",
     "marked-highlight": "^2.2.2",
+    "openai": "^5.16.0",
     "prismjs": "^1.29.0"
   },
   "devDependencies": {

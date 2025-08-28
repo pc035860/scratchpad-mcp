@@ -21,19 +21,19 @@ claude mcp add scratchpad-mcp-v2 -- /absolute/path/to/scratchpad-mcp-v2/start-mc
 // Quick usage: create a workflow, write, and search
 const workflow = await mcp.callTool('create-workflow', {
   name: 'AI Research Project',
-  description: 'Collaborative research notes and findings'
+  description: 'Collaborative research notes and findings',
 });
 
 await mcp.callTool('create-scratchpad', {
   workflow_id: workflow.id,
   title: 'Model Architecture Notes',
-  content: 'Initial transformer research findings...'
+  content: 'Initial transformer research findings...',
 });
 
 // Chinese search example (intelligent tokenization)
 const results = await mcp.callTool('search-scratchpads', {
   query: '自然語言處理模型架構',
-  limit: 10
+  limit: 10,
 });
 ```
 
@@ -48,6 +48,7 @@ node dist/server.js
 ```
 
 Why the startup script matters:
+
 - Correct path resolution and database path handling
 - Cross-directory support (works from any working directory)
 - Proper loading of optional Chinese tokenization extensions
@@ -57,10 +58,12 @@ Why the startup script matters:
 ## 🚀 Quick Start
 
 ### Prerequisites
+
 - Node.js 18.0.0 or newer
 - SQLite (FTS5 handled automatically)
 
 ### Installation
+
 ```bash
 # Clone the repository
 git clone <repository-url>
@@ -83,6 +86,7 @@ chmod +x start-mcp.sh
 ```
 
 ### Running as MCP Server
+
 ```bash
 # ✅ Production mode - ALWAYS use the startup script
 ./start-mcp.sh
@@ -94,14 +98,19 @@ npm run dev
 ```
 
 ### Environment Configuration
+
 ```bash
 # Optional: set a custom database path (relative to project root)
 export SCRATCHPAD_DB_PATH="./my-scratchpad.db"
+
+# Required for AI analysis features: OpenAI API key
+export OPENAI_API_KEY="your-openai-api-key"
 
 # Or modify start-mcp.sh directly
 ```
 
 ## 🧰 Available MCP Tools
+
 - `create-workflow` - Create workflow containers
 - `list-workflows` - List all workflows
 - `get-latest-active-workflow` - Get the most recently updated active workflow
@@ -112,20 +121,24 @@ export SCRATCHPAD_DB_PATH="./my-scratchpad.db"
 - `tail-scratchpad` - Tail content, or set `full_content=true` to get full content
 - `list-scratchpads` - List scratchpads in a workflow
 - `search-scratchpads` - Full-text search (with intelligent Chinese tokenization)
+- `extract-workflow-info` - Extract specific information from workflows using OpenAI models
 
 ---
 
 ## 🔗 Claude Code Integration
 
 ### Prerequisites
+
 - Node.js 18.0.0 or newer
 - Claude Code CLI installed and configured
 - Project built: `npm run build`
 
 ### ⚠️ Critical configuration
+
 Always use an absolute path to `start-mcp.sh` to ensure correct path resolution and cross-directory compatibility.
 
 ### Method 1: CLI installation (recommended)
+
 ```bash
 # Build the project first
 npm run build
@@ -141,7 +154,9 @@ claude mcp add scratchpad-mcp-v2 -- node ./dist/server.js
 ```
 
 ### Method 2: Manual configuration
+
 Project-level `.mcp.json` (recommended)
+
 ```json
 {
   "mcpServers": {
@@ -153,6 +168,7 @@ Project-level `.mcp.json` (recommended)
 ```
 
 Global `~/.claude.json`
+
 ```json
 {
   "mcpServers": {
@@ -167,19 +183,21 @@ Global `~/.claude.json`
 ```
 
 ❌ Invalid configuration examples (do not use)
+
 ```json
 {
   "mcpServers": {
     "scratchpad-mcp-v2": {
       "command": "node",
-      "args": ["./dist/server.js"],          // Breaks Chinese tokenization and path resolution
-      "cwd": "/path/to/project"               // 'cwd' is not a valid MCP parameter
+      "args": ["./dist/server.js"], // Breaks Chinese tokenization and path resolution
+      "cwd": "/path/to/project" // 'cwd' is not a valid MCP parameter
     }
   }
 }
 ```
 
 ### Cross-project usage
+
 ```bash
 # Works from any directory - the script handles path resolution
 cd /some/other/project
@@ -187,6 +205,7 @@ echo '{"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}' | /path
 ```
 
 ### Verification
+
 ```bash
 # Check MCP server status
 claude mcp list
@@ -201,12 +220,14 @@ claude mcp get scratchpad-mcp-v2
 ```
 
 ### Troubleshooting
+
 - Server does not start: verify Node 18+, run `npm run build`, ensure `start-mcp.sh` is executable, use absolute path in MCP config
 - Chinese search returns no results: most likely running `dist/server.js` directly — switch to `start-mcp.sh`
 - Message "Simple 擴展載入失敗": normal when extensions are not installed; system falls back to FTS5/LIKE
 - Tools not available: run `claude mcp list`, reload configuration, verify startup script path
 
 ### Best practices
+
 - Always use `start-mcp.sh`
 - Prefer absolute paths
 - Verify Chinese tokenizer loading messages
@@ -219,6 +240,7 @@ claude mcp get scratchpad-mcp-v2
 A standalone HTTP server to browse scratchpad workflows via a web UI.
 
 ### Quick Start
+
 ```bash
 # Start web viewer (default port 3000)
 npm run serve
@@ -230,7 +252,9 @@ node scripts/serve-workflow/server.js --port 3001 --dev
 ```
 
 ### Database path configuration
+
 Priority order:
+
 ```bash
 # 1. Command line parameter (highest priority)
 node scripts/serve-workflow/server.js --db-path "/path/to/database.db"
@@ -243,6 +267,7 @@ npm run serve
 ```
 
 ### Features
+
 - 🔍 Search & filter: full-text search across workflows and scratchpads
 - 🎨 Syntax highlighting: Prism.js with automatic dark/light theme
 - 📱 Responsive UI with organization and pagination
@@ -251,17 +276,21 @@ npm run serve
 ---
 
 ## 🇨🇳 Optional Chinese Text Enhancement
+
 Optional feature to improve Chinese search accuracy (the system works fine without it via FTS5/LIKE fallback).
 
 ### Installation
-1) Create an `extensions` directory
+
+1. Create an `extensions` directory
+
 ```bash
 mkdir -p extensions
 ```
 
-2) Download the extension and dictionaries for your platform
+2. Download the extension and dictionaries for your platform
 
 macOS
+
 ```bash
 curl -L "https://github.com/wangfenjin/simple/releases/download/v0.5.2/libsimple.dylib" \
      -o extensions/libsimple.dylib
@@ -270,6 +299,7 @@ curl -L "https://github.com/wangfenjin/simple/releases/download/v0.5.2/dict.tar.
 ```
 
 Linux
+
 ```bash
 curl -L "https://github.com/wangfenjin/simple/releases/download/v0.5.2/libsimple.so" \
      -o extensions/libsimple.so
@@ -277,18 +307,21 @@ curl -L "https://github.com/wangfenjin/simple/releases/download/v0.5.2/dict.tar.
      | tar -xz -C extensions/
 ```
 
-3) Create the required symlink for jieba dictionaries (use absolute path)
+3. Create the required symlink for jieba dictionaries (use absolute path)
+
 ```bash
 ln -sf "$(pwd)/extensions/dict" ./dict
 ```
 
-4) Use the automated installation script (includes proper symlinks)
+4. Use the automated installation script (includes proper symlinks)
+
 ```bash
 chmod +x scripts/install-chinese-support.sh
 ./scripts/install-chinese-support.sh
 ```
 
-5) Verify
+5. Verify
+
 ```bash
 ls -la extensions/
 ls -la dict  # Should point to the absolute path of extensions/dict
@@ -308,7 +341,9 @@ Note: even without extensions installed, all search features work (fallback to F
 ### Workflow Management
 
 #### `create-workflow`
+
 Create a new workflow container.
+
 ```typescript
 {
   name: string;           // required
@@ -318,7 +353,9 @@ Create a new workflow container.
 ```
 
 #### `list-workflows`
+
 List all workflows.
+
 ```typescript
 {
   project_scope?: string; // optional
@@ -326,7 +363,9 @@ List all workflows.
 ```
 
 #### `get-latest-active-workflow`
+
 Get the most recently updated active workflow.
+
 ```typescript
 {
   project_scope?: string; // optional
@@ -334,18 +373,22 @@ Get the most recently updated active workflow.
 ```
 
 #### `update-workflow-status`
+
 Activate or deactivate a workflow.
+
 ```typescript
 {
-  workflow_id: string;    // required
-  is_active: boolean;     // required
+  workflow_id: string; // required
+  is_active: boolean; // required
 }
 ```
 
 ### Scratchpad Operations
 
 #### `create-scratchpad`
+
 Create a scratchpad within a workflow.
+
 ```typescript
 {
   workflow_id: string;    // required
@@ -356,7 +399,9 @@ Create a scratchpad within a workflow.
 ```
 
 #### `get-scratchpad`
+
 Retrieve a specific scratchpad.
+
 ```typescript
 {
   id: string; // required
@@ -364,7 +409,9 @@ Retrieve a specific scratchpad.
 ```
 
 #### `append-scratchpad`
+
 Append content to an existing scratchpad.
+
 ```typescript
 {
   id: string;             // required
@@ -374,7 +421,9 @@ Append content to an existing scratchpad.
 ```
 
 #### `tail-scratchpad`
+
 Tail content, or return full content with `full_content=true`.
+
 ```typescript
 {
   id: string;             // required
@@ -390,7 +439,9 @@ Tail content, or return full content with `full_content=true`.
 Parameter priority: `full_content` > `tail_size` > default (50 lines)
 
 #### `list-scratchpads`
+
 List scratchpads with pagination and content control.
+
 ```typescript
 {
   workflow_id: string;    // required
@@ -407,7 +458,9 @@ Content control priority: `include_content` > `preview_mode` > `max_content_char
 ### Search & Discovery
 
 #### `search-scratchpads`
+
 Full-text search with automatic Chinese tokenization and graceful fallbacks.
+
 ```typescript
 {
   query: string;          // required
@@ -423,67 +476,91 @@ Full-text search with automatic Chinese tokenization and graceful fallbacks.
 
 Search intelligence: automatic detection → jieba → simple → FTS5 → LIKE; target <100ms.
 
+### AI Analysis
+
+#### `extract-workflow-info`
+
+Extract specific information from workflows using OpenAI's GPT models.
+
+```typescript
+{
+  workflow_id: string;          // required - ID of the workflow to analyze
+  extraction_prompt: string;   // required - specific prompt describing what to extract
+  model?: string;               // optional - OpenAI model (default: "gpt-5-nano")
+  reasoning_effort?: string;    // optional - reasoning level (default: "medium")
+                                // valid: "minimal" | "low" | "medium" | "high"
+}
+```
+
+**Prerequisites**: Requires `OPENAI_API_KEY` environment variable.
+
+**Supported Models**: gpt-5-nano, gpt-5-mini, gpt-4o, gpt-4o-mini and other OpenAI models. GPT-5 models support the `reasoning_effort` parameter for enhanced analysis quality.
+
+**Returns**: Structured analysis based on the extraction prompt, including the model used and number of scratchpads processed.
+
 ---
 
 ## 📋 Usage Examples (more)
 
 ### Basic Workflow
+
 ```typescript
 // 1) Create a project-scoped workflow
 const workflow = await callTool('create-workflow', {
   name: 'ML Research Project',
   description: 'Research notes and experiments',
-  project_scope: 'ml-research'
+  project_scope: 'ml-research',
 });
 
 // 2) Create a scratchpad with Chinese content
 const scratchpad = await callTool('create-scratchpad', {
   workflow_id: workflow.id,
   title: 'Transformer 架構研究',
-  content: '初始的自然語言處理模型架構研究，包含注意力機制的詳細分析...'
+  content: '初始的自然語言處理模型架構研究，包含注意力機制的詳細分析...',
 });
 
 // 3) Intelligent Chinese search (auto-detected jieba)
 const results = await callTool('search-scratchpads', {
   query: '注意力機制 自然語言',
   workflow_id: workflow.id,
-  limit: 10
+  limit: 10,
 });
 
 // 4) Force tokenizer mode (English scenario)
 const manualResults = await callTool('search-scratchpads', {
   query: 'transformer attention',
   useJieba: false,
-  limit: 10
+  limit: 10,
 });
 
 // 5) Append mixed-language content
 await callTool('append-scratchpad', {
   id: scratchpad.id,
-  content: '\n\n## Additional Findings\n\nFrom paper XYZ: 新發現...'
+  content: '\n\n## Additional Findings\n\nFrom paper XYZ: 新發現...',
 });
 
 // 6) Get full content via tail-scratchpad (alternative to get-scratchpad)
 const fullContent = await callTool('tail-scratchpad', {
   id: scratchpad.id,
-  full_content: true
+  full_content: true,
 });
 
 // 7) Traditional tail mode
 const recentContent = await callTool('tail-scratchpad', {
   id: scratchpad.id,
-  tail_size: { lines: 10 }
+  tail_size: { lines: 10 },
 });
 
 // 8) Full content but metadata only
 const controlledContent = await callTool('tail-scratchpad', {
   id: scratchpad.id,
   full_content: true,
-  include_content: false
+  include_content: false,
 });
 ```
 
 ### Integration with Claude Code (highlights)
+
 - Multi-agent collaboration via workflows
 - Context persistence across conversations
 - Intelligent search for both Chinese and English content
@@ -495,6 +572,7 @@ const controlledContent = await callTool('tail-scratchpad', {
 ## 💻 Development Guide
 
 ### Available Scripts
+
 ```bash
 npm run dev       # Development (hot reload)
 npm run build     # Build to dist/
@@ -508,6 +586,7 @@ npm run clean
 ```
 
 ### Project Structure
+
 ```
 src/
 ├── server.ts              # MCP server entry point
@@ -545,15 +624,17 @@ extensions/
 ```
 
 ### Testing Strategy
+
 - Database layer: CRUD, FTS5, error and edge cases, Chinese tokenization
 - MCP tools integration: 11 tools parameter validation, scenarios, protocol compliance
 - Performance: FTS5 <100ms, 1MB content, concurrent access, tokenization performance
 - Project scope: workflow isolation, cross-project restrictions
 
 ### Code Quality Standards
+
 - TypeScript strict mode (no `any`)
 - ESLint + Prettier
-- >95% test coverage
+- > 95% test coverage
 - Targets: <100ms search, 1MB content
 - Path resolution via the startup script
 
@@ -562,6 +643,7 @@ extensions/
 ## 🔧 Advanced Configuration
 
 ### Startup Script Features
+
 ```bash
 #!/bin/bash
 # Ensure correct working directory
@@ -569,9 +651,11 @@ cd "$(dirname "$0")"
 export SCRATCHPAD_DB_PATH="${SCRATCHPAD_DB_PATH:-./scratchpad.db}"
 node dist/server.js "$@"
 ```
+
 Benefits: stable working directory, proper extension/dictionary loading, DB path setup, cross-directory support.
 
 ### FTS5 Configuration
+
 - Disabled automatically in test environments
 - Tokenizer selection: simple/jieba/standard
 - Fallback strategy: jieba → simple → FTS5 → LIKE
@@ -579,6 +663,7 @@ Benefits: stable working directory, proper extension/dictionary loading, DB path
 - Ranking: BM25
 
 ### Database Optimization
+
 - WAL mode, prepared statements, single connection with proper cleanup, smart tokenization
 
 ---
@@ -586,35 +671,38 @@ Benefits: stable working directory, proper extension/dictionary loading, DB path
 ## 📊 Technical Specifications
 
 ### Architecture
+
 - Server: MCP over stdio
 - Tools: 11 core tools with comprehensive parameter validation
 - Database: SQLite with FTS5 full-text search, WAL mode, optional Chinese tokenization
 - Extension layer: optional Chinese word segmentation with cross-directory support
 
 ### Performance Characteristics
-| Metric | Target | Implementation |
-|--------|--------|----------------|
-| Search Response | <100ms | FTS5 indexing with prepared statements |
-| Chinese Search | <150ms | Jieba tokenization with fallback strategy |
-| Content Limit | 1MB per scratchpad | Validated at tool level |
-| Workflow Capacity | 50 scratchpads | Enforced by database constraints |
-| Concurrent Access | Thread-safe | SQLite WAL mode |
-| Cross-Directory | ✅ Supported | Via startup script path resolution |
+
+| Metric            | Target             | Implementation                            |
+| ----------------- | ------------------ | ----------------------------------------- |
+| Search Response   | <100ms             | FTS5 indexing with prepared statements    |
+| Chinese Search    | <150ms             | Jieba tokenization with fallback strategy |
+| Content Limit     | 1MB per scratchpad | Validated at tool level                   |
+| Workflow Capacity | 50 scratchpads     | Enforced by database constraints          |
+| Concurrent Access | Thread-safe        | SQLite WAL mode                           |
+| Cross-Directory   | ✅ Supported       | Via startup script path resolution        |
 
 ### Data Model
+
 ```
 workflows
 ├── id (primary key)
 ├── name
 ├── description
 ├── created_at
-├── updated_at  
+├── updated_at
 ├── scratchpad_count
 ├── is_active
 └── project_scope
 
 scratchpads
-├── id (primary key)  
+├── id (primary key)
 ├── workflow_id (foreign key)
 ├── title
 ├── content
@@ -631,6 +719,7 @@ scratchpads_fts (FTS5 virtual table)
 ```
 
 ### Environment Requirements
+
 - Node.js 18+
 - SQLite with FTS5
 - Memory ~50MB
@@ -638,12 +727,14 @@ scratchpads_fts (FTS5 virtual table)
 - Optional extensions: libsimple.dylib/.so for Chinese support
 
 ### Dependencies
+
 - Core: `@modelcontextprotocol/sdk`, `better-sqlite3`
 - Dev: `typescript`, `tsup`, `vitest`, `eslint`, `prettier`
 
 ---
 
 ## 🤝 Contributing
+
 1. Fork the repository
 2. Create a branch: `git checkout -b feature/amazing-feature`
 3. Install deps: `npm install`
@@ -657,6 +748,7 @@ scratchpads_fts (FTS5 virtual table)
 11. Open a PR
 
 ### Development Standards
+
 - New features must include tests; maintain >95% coverage
 - Follow TypeScript strict mode
 - Conventional Commits
@@ -666,9 +758,11 @@ scratchpads_fts (FTS5 virtual table)
 ---
 
 ## 📄 License
+
 MIT License (see `LICENSE`)
 
 ## 📞 Support
+
 - Issues: GitHub Issues for bug reports and feature requests
 - Documentation: inline code docs and tests
 - Performance: FTS5 target <100ms
