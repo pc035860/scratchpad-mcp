@@ -30,6 +30,8 @@ import Database from 'better-sqlite3';
 import { marked } from 'marked';
 import { markedHighlight } from 'marked-highlight';
 import Prism from 'prismjs';
+// Tokenizer for token counting
+import { encoding_for_model, get_encoding } from 'tiktoken';
 
 // 載入 Prism.js 語言支援
 import 'prismjs/components/prism-javascript.js';
@@ -55,9 +57,10 @@ const port = getArgValue('--port') || DEFAULT_PORT;
 const isDev = args.includes('--dev');
 
 // 資料庫路徑設定 - 優先級：命令列參數 > 環境變數 > 預設值
-const DB_PATH = getArgValue('--db-path') || 
-               process.env.SCRATCHPAD_DB_PATH || 
-               path.join(process.cwd(), 'scratchpad.v6.db');
+const DB_PATH =
+  getArgValue('--db-path') ||
+  process.env.SCRATCHPAD_DB_PATH ||
+  path.join(process.cwd(), 'scratchpad.v6.db');
 
 console.log('🚀 Workflow Viewer Server');
 console.log(`📁 資料庫位置: ${DB_PATH}`);
@@ -69,13 +72,13 @@ function validateDatabasePath(dbPath) {
     // 取得絕對路徑
     const absolutePath = path.resolve(dbPath);
     const parentDir = path.dirname(absolutePath);
-    
+
     // 檢查父目錄是否存在
     if (!fs.existsSync(parentDir)) {
       console.error(`❌ 資料庫父目錄不存在: ${parentDir}`);
       process.exit(1);
     }
-    
+
     // 檢查父目錄是否可寫
     try {
       fs.accessSync(parentDir, fs.constants.W_OK);
@@ -83,14 +86,14 @@ function validateDatabasePath(dbPath) {
       console.error(`❌ 資料庫父目錄沒有寫入權限: ${parentDir}`);
       process.exit(1);
     }
-    
+
     // 檢查資料庫檔案是否存在
     if (!fs.existsSync(absolutePath)) {
       console.error('❌ 資料庫檔案不存在！請先運行 MCP server 建立資料庫');
       console.error(`   資料庫路徑: ${absolutePath}`);
       process.exit(1);
     }
-    
+
     return absolutePath;
   } catch (err) {
     console.error(`❌ 資料庫路徑無效: ${dbPath}`);
@@ -105,6 +108,64 @@ const VALIDATED_DB_PATH = validateDatabasePath(DB_PATH);
 // 初始化資料庫連接
 const db = new Database(VALIDATED_DB_PATH, { readonly: false });
 
+// --- Token encoder initialization and cache ---
+const TIKTOKEN_MODEL = process.env.TIKTOKEN_MODEL || null;
+let __tokenEncoder = null; // encoder instance or false when unavailable
+const __tokenCache = new Map(); // key: `${id}:${updated_at}` -> number
+
+function getTokenEncoder() {
+  if (__tokenEncoder !== null) return __tokenEncoder;
+  try {
+    __tokenEncoder = TIKTOKEN_MODEL
+      ? encoding_for_model(TIKTOKEN_MODEL)
+      : get_encoding('cl100k_base');
+  } catch (e) {
+    console.warn('⚠️ 無法初始化 tiktoken 編碼器，將略過 token 顯示：', e?.message || e);
+    __tokenEncoder = false;
+  }
+  return __tokenEncoder;
+}
+
+function getTokenCountForScratchpad(content, id, updatedAt) {
+  try {
+    if (!content || !id || !updatedAt) return null;
+    const key = `${id}:${updatedAt}`;
+    if (__tokenCache.has(key)) return __tokenCache.get(key);
+    const enc = getTokenEncoder();
+    if (!enc) return null;
+    const count = enc.encode(String(content)).length;
+    __tokenCache.set(key, count);
+    return count;
+  } catch {
+    return null;
+  }
+}
+
+function formatTokenCompact(n) {
+  if (typeof n !== 'number' || !Number.isFinite(n)) return '';
+  const abs = Math.abs(n);
+  const sign = n < 0 ? '-' : '';
+  if (abs < 1000) return `${sign}${abs}`;
+  const units = [
+    { v: 1e9, s: 'B' },
+    { v: 1e6, s: 'M' },
+    { v: 1e3, s: 'k' },
+  ];
+  for (const u of units) {
+    if (abs >= u.v) {
+      const val = (abs / u.v).toFixed(1);
+      return `${sign}${val.endsWith('.0') ? val.slice(0, -2) : val}${u.s}`;
+    }
+  }
+  return `${sign}${abs}`;
+}
+
+function renderTokenBadge(count) {
+  if (typeof count !== 'number') return '';
+  const label = formatTokenCompact(count);
+  return `<div class="token-badge" aria-label="Token count" title="${count} tokens">${label}</div>`;
+}
+
 // 設定 marked 選項並整合 Prism.js
 marked.setOptions({
   gfm: true,
@@ -112,23 +173,25 @@ marked.setOptions({
   pedantic: false,
   sanitize: false,
   smartLists: true,
-  smartypants: true
+  smartypants: true,
 });
 
 // 使用 marked-highlight 擴展整合 Prism.js
-marked.use(markedHighlight({
-  langPrefix: 'language-',
-  highlight: function(code, language) {
-    if (language && Prism.languages[language]) {
-      try {
-        return Prism.highlight(code, Prism.languages[language], language);
-      } catch (e) {
-        console.warn(`語法高亮失敗 (${language}):`, e.message);
+marked.use(
+  markedHighlight({
+    langPrefix: 'language-',
+    highlight: function (code, language) {
+      if (language && Prism.languages[language]) {
+        try {
+          return Prism.highlight(code, Prism.languages[language], language);
+        } catch (e) {
+          console.warn(`語法高亮失敗 (${language}):`, e.message);
+        }
       }
-    }
-    return code;
-  }
-}));
+      return code;
+    },
+  })
+);
 
 /**
  * 模板引擎類別
@@ -247,6 +310,10 @@ class WorkflowDatabase {
         (SELECT COUNT(*) FROM scratchpads) as total_scratchpads,
         (SELECT COUNT(DISTINCT project_scope) FROM workflows WHERE project_scope IS NOT NULL) as total_projects
     `);
+    // 取得最新 scratchpad 更新時間
+    this.getLatestScratchpadTimeStmt = this.db.prepare(`
+      SELECT MAX(updated_at) AS latest FROM scratchpads WHERE workflow_id = ?
+    `);
   }
 
   getWorkflows(options = {}) {
@@ -263,17 +330,29 @@ class WorkflowDatabase {
     const statusValue = status === 'active' ? 1 : status === 'inactive' ? 0 : null;
 
     const workflows = this.getWorkflowsStmt.all(
-      searchPattern, searchPattern, searchPattern,
-      projectScope, projectScope,
-      statusValue, statusValue,
-      sort, sort, sort, sort,
-      limit, offset
+      searchPattern,
+      searchPattern,
+      searchPattern,
+      projectScope,
+      projectScope,
+      statusValue,
+      statusValue,
+      sort,
+      sort,
+      sort,
+      sort,
+      limit,
+      offset
     );
 
     const total = this.countWorkflowsStmt.get(
-      searchPattern, searchPattern, searchPattern,
-      projectScope, projectScope,
-      statusValue, statusValue
+      searchPattern,
+      searchPattern,
+      searchPattern,
+      projectScope,
+      projectScope,
+      statusValue,
+      statusValue
     ).total;
 
     return { workflows, total };
@@ -290,12 +369,49 @@ class WorkflowDatabase {
     return this.getScratchpadsStmt.all(workflowId);
   }
 
+  getScratchpadById(id) {
+    try {
+      // 懶載入：若尚未準備，建立一次性 statement
+      if (!this.getScratchpadByIdStmt) {
+        this.getScratchpadByIdStmt = this.db.prepare('SELECT * FROM scratchpads WHERE id = ?');
+      }
+      return this.getScratchpadByIdStmt.get(id) || null;
+    } catch {
+      return null;
+    }
+  }
+
   getProjectScopes() {
     return this.getProjectScopesStmt.all();
   }
 
   getStats() {
     return this.getStatsStmt.get();
+  }
+
+  getScratchpadSummary(id) {
+    const s = this.getScratchpadById(id);
+    if (!s) return null;
+    return {
+      scratchpad_id: s.id,
+      updated_at: s.updated_at,
+      size_bytes: s.size_bytes,
+      workflow_id: s.workflow_id,
+    };
+  }
+
+  // 輕量摘要：供 JSON/SSE 判斷是否有更新
+  getWorkflowSummary(id) {
+    const w = this.getWorkflowById(id);
+    if (!w) return null;
+    const row = this.getLatestScratchpadTimeStmt.get(id);
+    const latestScratchpadAt = row && row.latest ? row.latest : null;
+    return {
+      workflow_id: w.id,
+      updated_at: w.updated_at,
+      scratchpad_count: w.scratchpad_count,
+      latest_scratchpad_at: latestScratchpadAt,
+    };
   }
 
   // 更新 workflow 啟用狀態
@@ -358,7 +474,7 @@ const router = new Router();
 async function handleStaticFile(req, res, pathname) {
   try {
     const filePath = path.join(__dirname, pathname);
-    
+
     // 安全檢查：防止路徑遍歷攻擊
     const normalizedPath = path.normalize(filePath);
     if (!normalizedPath.startsWith(__dirname)) {
@@ -384,15 +500,14 @@ async function handleStaticFile(req, res, pathname) {
     };
 
     const contentType = contentTypes[ext] || 'application/octet-stream';
-    
-    res.writeHead(200, { 
+
+    res.writeHead(200, {
       'Content-Type': contentType,
-      'Cache-Control': isDev ? 'no-cache' : 'public, max-age=3600'
+      'Cache-Control': isDev ? 'no-cache' : 'public, max-age=3600',
     });
-    
+
     const fileStream = fs.createReadStream(filePath);
     fileStream.pipe(res);
-    
   } catch (error) {
     if (error.code === 'ENOENT') {
       handleNotFound(res, '檔案不存在');
@@ -437,32 +552,41 @@ async function handleHomepage(req, res, params) {
       title: 'Workflow Viewer',
       stats,
       projectScopeOptions: projectScopes
-        .map(scope => 
-          `<option value="${escapeHtml(scope.project_scope || '')}">${escapeHtml(scope.project_scope || '未分類')} (${scope.count})</option>`
-        ).join(''),
-      workflowCards: workflows.map(workflow => {
-        const cardData = {
-          workflow: {
-            id: escapeHtml(workflow.id),
-            name: escapeHtml(workflow.name),
-            statusClass: workflow.is_active ? 'active' : 'inactive',
-            statusText: workflow.is_active ? '🟢 啟用中' : '🔴 停用',
-            descriptionHtml: workflow.description ? 
-              `<p class="card-description">${escapeHtml(workflow.description)}</p>` : '',
-            projectScopeDisplay: escapeHtml(workflow.project_scope || '未分類'),
-            scratchpad_count: workflow.scratchpad_count,
-            relativeTime: formatRelativeTime(workflow.updated_at)
-          }
-        };
-        return templates.render('workflow-card', cardData);
-      }).join(''),
+        .map(
+          (scope) =>
+            `<option value="${escapeHtml(scope.project_scope || '')}">${escapeHtml(scope.project_scope || '未分類')} (${scope.count})</option>`
+        )
+        .join(''),
+      workflowCards: workflows
+        .map((workflow) => {
+          const cardData = {
+            workflow: {
+              id: escapeHtml(workflow.id),
+              name: escapeHtml(workflow.name),
+              statusClass: workflow.is_active ? 'active' : 'inactive',
+              statusText: workflow.is_active ? '🟢 啟用中' : '🔴 停用',
+              descriptionHtml: workflow.description
+                ? `<p class="card-description">${escapeHtml(workflow.description)}</p>`
+                : '',
+              projectScopeDisplay: escapeHtml(workflow.project_scope || '未分類'),
+              scratchpad_count: workflow.scratchpad_count,
+              relativeTime: formatRelativeTime(workflow.updated_at),
+            },
+          };
+          return templates.render('workflow-card', cardData);
+        })
+        .join(''),
       pagination,
       prevDisabled: pagination.page <= 1 ? 'disabled' : '',
-      nextDisabled: pagination.page >= pagination.pages ? 'disabled' : ''
+      nextDisabled: pagination.page >= pagination.pages ? 'disabled' : '',
     };
 
     const content = templates.render('homepage', templateData);
-    const html = templates.render('layout', { title: 'Workflow Viewer', content, additionalHead: '' });
+    const html = templates.render('layout', {
+      title: 'Workflow Viewer',
+      content,
+      additionalHead: '',
+    });
 
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(html);
@@ -482,8 +606,8 @@ async function handleWorkflowDetail(req, res, params) {
       return;
     }
 
-  const scratchpads = workflowDB.getScratchpadsByWorkflowId(workflowId);
-  const projectScopes = workflowDB.getProjectScopes();
+    const scratchpads = workflowDB.getScratchpadsByWorkflowId(workflowId);
+    const projectScopes = workflowDB.getProjectScopes();
 
     // 準備模板資料
     const templateData = {
@@ -500,43 +624,315 @@ async function handleWorkflowDetail(req, res, params) {
         createdTime: formatTimestamp(workflow.created_at),
         updatedTime: formatTimestamp(workflow.updated_at),
         updatedAt: escapeHtml(String(workflow.updated_at || '')),
-        descriptionHtml: workflow.description ? 
-          `<p class="workflow-description">${escapeHtml(workflow.description)}</p>` : ''
+        descriptionHtml: workflow.description
+          ? `<p class="workflow-description">${escapeHtml(workflow.description)}</p>`
+          : '',
       },
       projectScopeOptions: projectScopes
-        .map(scope => 
-          `<option value="${escapeHtml(scope.project_scope || '')}" ${(scope.project_scope || '') === (workflow.project_scope || '') ? 'selected' : ''}>${escapeHtml(scope.project_scope || '未分類')} (${scope.count})</option>`
-        ).join(''),
+        .map(
+          (scope) =>
+            `<option value="${escapeHtml(scope.project_scope || '')}" ${(scope.project_scope || '') === (workflow.project_scope || '') ? 'selected' : ''}>${escapeHtml(scope.project_scope || '未分類')} (${scope.count})</option>`
+        )
+        .join(''),
       scratchpadCount: scratchpads.length,
-      scratchpadSearchHtml: scratchpads.length > 1 ? 
-        '<input type="text" id="scratchpad-search" placeholder="搜尋 scratchpad 標題..." class="scratchpad-search">' : '',
-      scratchpadItems: scratchpads.map(scratchpad => {
-        const lineCount = typeof scratchpad.content === 'string'
-          ? (scratchpad.content.split('\n').length)
-          : 0;
-        const rawB64 = Buffer.from(String(scratchpad.content || ''), 'utf8').toString('base64');
-        const itemData = {
-          scratchpad: {
-            title: escapeHtml(scratchpad.title),
-            sizeDisplay: formatBytes(scratchpad.size_bytes),
-            relativeTime: formatRelativeTime(scratchpad.updated_at),
-            lineCount,
-            rawB64: rawB64,
-            contentHtml: marked(scratchpad.content)
-          }
-        };
-        return templates.render('scratchpad-item', itemData);
-      }).join('')
+      scratchpadSearchHtml:
+        scratchpads.length > 1
+          ? '<input type="text" id="scratchpad-search" placeholder="搜尋 scratchpad 標題..." class="scratchpad-search">'
+          : '',
+      scratchpadItems: scratchpads
+        .map((scratchpad) => {
+          const lineCount =
+            typeof scratchpad.content === 'string' ? scratchpad.content.split('\n').length : 0;
+          const rawB64 = Buffer.from(String(scratchpad.content || ''), 'utf8').toString('base64');
+          const itemData = {
+            scratchpad: {
+              id: escapeHtml(scratchpad.id),
+              title: escapeHtml(scratchpad.title),
+              sizeDisplay: formatBytes(scratchpad.size_bytes),
+              relativeTime: formatRelativeTime(scratchpad.updated_at),
+              lineCount,
+              rawB64: rawB64,
+              contentHtml: marked(scratchpad.content),
+            },
+          };
+          return templates.render('scratchpad-item', itemData);
+        })
+        .join(''),
     };
 
     const content = templates.render('workflow-detail', templateData);
-    const html = templates.render('layout', { title: `${workflow.name} - Workflow`, content, additionalHead: '' });
+    const html = templates.render('layout', {
+      title: `${workflow.name} - Workflow`,
+      content,
+      additionalHead: '',
+    });
 
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(html);
   } catch (error) {
     console.error('Workflow 詳細頁面錯誤:', error);
     handleError(res, '內部伺服器錯誤', error.message);
+  }
+}
+
+// 產生 scratchpads 容器 HTML 片段
+function renderScratchpadsContainerHTML(workflowId) {
+  const workflow = workflowDB.getWorkflowById(workflowId);
+  if (!workflow) return null;
+  const scratchpads = workflowDB.getScratchpadsByWorkflowId(workflowId);
+  const scratchpadItems = scratchpads
+    .map((scratchpad) => {
+      const lineCount =
+        typeof scratchpad.content === 'string' ? scratchpad.content.split('\n').length : 0;
+      const rawB64 = Buffer.from(String(scratchpad.content || ''), 'utf8').toString('base64');
+      const tokenCount = getTokenCountForScratchpad(
+        scratchpad.content,
+        scratchpad.id,
+        scratchpad.updated_at
+      );
+      const itemData = {
+        scratchpad: {
+          id: escapeHtml(scratchpad.id),
+          title: escapeHtml(scratchpad.title),
+          sizeDisplay: formatBytes(scratchpad.size_bytes),
+          relativeTime: formatRelativeTime(scratchpad.updated_at),
+          lineCount,
+          rawB64,
+          contentHtml: marked(scratchpad.content),
+          tokenBadge: renderTokenBadge(tokenCount),
+        },
+      };
+      return templates.render('scratchpad-item', itemData);
+    })
+    .join('');
+  return `<div class="scratchpads-container" id="scratchpads-container">${scratchpadItems}</div>`;
+}
+
+// API: Workflow 摘要
+async function handleApiWorkflowSummary(req, res, params) {
+  try {
+    const workflowId = params[1];
+    const summary = workflowDB.getWorkflowSummary(workflowId);
+    if (!summary) {
+      res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Workflow 不存在' }));
+      return;
+    }
+    const query = url.parse(req.url, true).query;
+    const since = query.since ? Number(query.since) : null;
+    const etag = `W/\"${summary.updated_at}\"`;
+    const ifNoneMatch = req.headers['if-none-match'];
+
+    let changed = true;
+    if (since !== null && !Number.isNaN(since)) {
+      changed = summary.updated_at > since;
+    }
+    if (ifNoneMatch && ifNoneMatch === etag) {
+      changed = false;
+    }
+    if (!changed) {
+      res.writeHead(304, { ETag: etag });
+      res.end();
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', ETag: etag });
+    res.end(JSON.stringify({ ...summary, changed: true }));
+  } catch (error) {
+    console.error('API workflow 摘要錯誤:', error);
+    res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ error: '內部伺服器錯誤' }));
+  }
+}
+
+// API: 取得 scratchpads 容器 HTML 片段
+async function handleApiWorkflowScratchpads(req, res, params) {
+  try {
+    const workflowId = params[1];
+    const html = renderScratchpadsContainerHTML(workflowId);
+    if (!html) {
+      res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('Workflow 不存在');
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end(html);
+  } catch (error) {
+    console.error('API scratchpads 片段錯誤:', error);
+    res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('內部伺服器錯誤');
+  }
+}
+
+// 產生單一 scratchpad 項目 HTML
+function renderSingleScratchpadHTML(scratchpadId) {
+  const s = workflowDB.getScratchpadById(scratchpadId);
+  if (!s) return null;
+  const lineCount = typeof s.content === 'string' ? s.content.split('\n').length : 0;
+  const rawB64 = Buffer.from(String(s.content || ''), 'utf8').toString('base64');
+  const tokenCount = getTokenCountForScratchpad(s.content, s.id, s.updated_at);
+  const itemData = {
+    scratchpad: {
+      id: escapeHtml(s.id),
+      title: escapeHtml(s.title),
+      sizeDisplay: formatBytes(s.size_bytes),
+      relativeTime: formatRelativeTime(s.updated_at),
+      lineCount,
+      rawB64,
+      contentHtml: marked(s.content),
+      tokenBadge: renderTokenBadge(tokenCount),
+    },
+  };
+  return templates.render('scratchpad-item', itemData);
+}
+
+// API: Scratchpad 摘要
+async function handleApiScratchpadSummary(req, res, params) {
+  try {
+    const scratchpadId = params[1];
+    const summary = workflowDB.getScratchpadSummary(scratchpadId);
+    if (!summary) {
+      res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Scratchpad 不存在' }));
+      return;
+    }
+    const query = url.parse(req.url, true).query;
+    const since = query.since ? Number(query.since) : null;
+    const etag = `W/\"${summary.updated_at}\"`;
+    const ifNoneMatch = req.headers['if-none-match'];
+    let changed = true;
+    if (since !== null && !Number.isNaN(since)) changed = summary.updated_at > since;
+    if (ifNoneMatch && ifNoneMatch === etag) changed = false;
+    if (!changed) {
+      res.writeHead(304, { ETag: etag });
+      res.end();
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', ETag: etag });
+    res.end(JSON.stringify({ ...summary, changed: true }));
+  } catch (error) {
+    console.error('API scratchpad 摘要錯誤:', error);
+    res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ error: '內部伺服器錯誤' }));
+  }
+}
+
+// API: 單一 scratchpad HTML 片段
+async function handleApiScratchpadHtml(req, res, params) {
+  try {
+    const scratchpadId = params[1];
+    const html = renderSingleScratchpadHTML(scratchpadId);
+    if (!html) {
+      res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('Scratchpad 不存在');
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end(html);
+  } catch (error) {
+    console.error('API scratchpad HTML 片段錯誤:', error);
+    res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('內部伺服器錯誤');
+  }
+}
+
+// SSE: 單一 scratchpad 更新
+async function handleSSEScratchpad(req, res, params) {
+  try {
+    const scratchpadId = params[1];
+    const summary = workflowDB.getScratchpadSummary(scratchpadId);
+    if (!summary) {
+      res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('Scratchpad 不存在');
+      return;
+    }
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+    });
+    let last = summary.updated_at;
+    res.write(`event: update\n`);
+    res.write(`data: ${JSON.stringify({ scratchpad_id: scratchpadId, updated_at: last })}\n\n`);
+    const timer = setInterval(() => {
+      try {
+        const s = workflowDB.getScratchpadSummary(scratchpadId);
+        if (s && s.updated_at !== last) {
+          last = s.updated_at;
+          res.write(`event: update\n`);
+          res.write(
+            `data: ${JSON.stringify({ scratchpad_id: scratchpadId, updated_at: last })}\n\n`
+          );
+        } else {
+          res.write(`: ping\n\n`);
+        }
+      } catch (e) {
+        clearInterval(timer);
+        try {
+          res.end();
+        } catch {}
+      }
+    }, 5000);
+    req.on('close', () => clearInterval(timer));
+  } catch (error) {
+    console.error('SSE scratchpad 錯誤:', error);
+    try {
+      res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+    } catch {}
+    try {
+      res.end('內部伺服器錯誤');
+    } catch {}
+  }
+}
+
+// SSE: workflow 更新推播
+async function handleSSEWorkflow(req, res, params) {
+  try {
+    const workflowId = params[1];
+    const summary = workflowDB.getWorkflowSummary(workflowId);
+    if (!summary) {
+      res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('Workflow 不存在');
+      return;
+    }
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+    });
+    let last = summary.updated_at;
+    // 初始事件
+    res.write(`event: update\n`);
+    res.write(`data: ${JSON.stringify({ workflow_id: workflowId, updated_at: last })}\n\n`);
+
+    const timer = setInterval(() => {
+      try {
+        const s = workflowDB.getWorkflowSummary(workflowId);
+        if (s && s.updated_at !== last) {
+          last = s.updated_at;
+          res.write(`event: update\n`);
+          res.write(`data: ${JSON.stringify({ workflow_id: workflowId, updated_at: last })}\n\n`);
+        } else {
+          res.write(`: ping\n\n`);
+        }
+      } catch (e) {
+        clearInterval(timer);
+        try {
+          res.end();
+        } catch {}
+      }
+    }, 5000);
+
+    req.on('close', () => {
+      clearInterval(timer);
+    });
+  } catch (error) {
+    console.error('SSE workflow 錯誤:', error);
+    try {
+      res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+    } catch {}
+    try {
+      res.end('內部伺服器錯誤');
+    } catch {}
   }
 }
 
@@ -609,8 +1005,12 @@ async function handleUpdateWorkflowActive(req, res, params) {
 
     // 讀取請求body
     let body = '';
-    req.on('data', (chunk) => { body += chunk; });
-    await new Promise((resolve) => { req.on('end', resolve); });
+    req.on('data', (chunk) => {
+      body += chunk;
+    });
+    await new Promise((resolve) => {
+      req.on('end', resolve);
+    });
 
     let requestData;
     try {
@@ -636,11 +1036,13 @@ async function handleUpdateWorkflowActive(req, res, params) {
     }
 
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify({
-      success: true,
-      isActive,
-      message: `Workflow ${isActive ? '已啟用' : '已停用'}`,
-    }));
+    res.end(
+      JSON.stringify({
+        success: true,
+        isActive,
+        message: `Workflow ${isActive ? '已啟用' : '已停用'}`,
+      })
+    );
   } catch (error) {
     console.error('更新 workflow 狀態錯誤:', error);
     res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -661,8 +1063,12 @@ async function handleUpdateWorkflowScope(req, res, params) {
 
     // 讀取請求body
     let body = '';
-    req.on('data', (chunk) => { body += chunk; });
-    await new Promise((resolve) => { req.on('end', resolve); });
+    req.on('data', (chunk) => {
+      body += chunk;
+    });
+    await new Promise((resolve) => {
+      req.on('end', resolve);
+    });
 
     let requestData;
     try {
@@ -688,11 +1094,13 @@ async function handleUpdateWorkflowScope(req, res, params) {
     }
 
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify({
-      success: true,
-      projectScope: projectScope || null,
-      message: `Workflow scope 已更新為 ${projectScope || '未分類'}`,
-    }));
+    res.end(
+      JSON.stringify({
+        success: true,
+        projectScope: projectScope || null,
+        message: `Workflow scope 已更新為 ${projectScope || '未分類'}`,
+      })
+    );
   } catch (error) {
     console.error('更新 workflow scope 錯誤:', error);
     res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -714,7 +1122,7 @@ async function handleHealth(req, res, params) {
 function handleNotFound(res, message = 'Workflow 不存在') {
   const templateData = {
     title: '404 - 找不到頁面',
-    message: escapeHtml(message)
+    message: escapeHtml(message),
   };
 
   const content = templates.render('error', templateData);
@@ -727,7 +1135,7 @@ function handleNotFound(res, message = 'Workflow 不存在') {
 function handleError(res, title, message) {
   const templateData = {
     title: escapeHtml(title),
-    message: escapeHtml(message)
+    message: escapeHtml(message),
   };
 
   const content = templates.render('error', templateData);
@@ -794,6 +1202,12 @@ router.addRoute('GET', '^/$', handleHomepage);
 router.addRoute('GET', '^/workflow/([a-f0-9-]+)$', handleWorkflowDetail);
 router.addRoute('GET', '^/api/workflows$', handleApiWorkflows);
 router.addRoute('GET', '^/api/project-scopes$', handleApiProjectScopes);
+router.addRoute('GET', '^/api/workflow/([a-f0-9-]+)/summary$', handleApiWorkflowSummary);
+router.addRoute('GET', '^/api/workflow/([a-f0-9-]+)/scratchpads$', handleApiWorkflowScratchpads);
+router.addRoute('GET', '^/sse/workflow/([a-f0-9-]+)$', handleSSEWorkflow);
+router.addRoute('GET', '^/api/scratchpad/([a-f0-9-]+)/summary$', handleApiScratchpadSummary);
+router.addRoute('GET', '^/api/scratchpad/([a-f0-9-]+)/html$', handleApiScratchpadHtml);
+router.addRoute('GET', '^/sse/scratchpad/([a-f0-9-]+)$', handleSSEScratchpad);
 router.addRoute('PUT', '^/api/workflow/([a-f0-9-]+)/active$', handleUpdateWorkflowActive);
 router.addRoute('PUT', '^/api/workflow/([a-f0-9-]+)/scope$', handleUpdateWorkflowScope);
 router.addRoute('GET', '^/health$', handleHealth);
@@ -842,6 +1256,12 @@ server.listen(port, () => {
   console.log(`   http://localhost:${port}/workflow/<id>       - Workflow 詳細頁面`);
   console.log(`   http://localhost:${port}/api/workflows       - Workflows API`);
   console.log(`   http://localhost:${port}/api/project-scopes  - Project Scopes API`);
+  console.log(`   http://localhost:${port}/api/workflow/<id>/summary     - Workflow 摘要`);
+  console.log(`   http://localhost:${port}/api/workflow/<id>/scratchpads - Scratchpads 片段`);
+  console.log(`   http://localhost:${port}/sse/workflow/<id>             - Workflow SSE 推播`);
+  console.log(`   http://localhost:${port}/api/scratchpad/<id>/summary   - Scratchpad 摘要`);
+  console.log(`   http://localhost:${port}/api/scratchpad/<id>/html      - Scratchpad HTML 片段`);
+  console.log(`   http://localhost:${port}/sse/scratchpad/<id>           - Scratchpad SSE 推播`);
   console.log(`   http://localhost:${port}/health              - 健康檢查`);
   console.log(`   http://localhost:${port}/static/*            - 靜態資源`);
   console.log('');

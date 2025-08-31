@@ -454,7 +454,9 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   margin-bottom: 2rem;
-  overflow: hidden;
+  /* sticky 元素需要可見 overflow，避免被裁切 */
+  overflow: visible;
+  position: relative; /* 供 token 徽章定位 */
 }
 
 .scratchpad-item:last-child {
@@ -485,10 +487,51 @@ body {
   color: var(--text-secondary);
 }
 
+.scratchpad-controls {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btn-focus {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.btn-focus:hover {
+  border-color: var(--primary-color);
+}
+
+/* Token 計數徽章 */
+.token-badge {
+  grid-column: 2;
+  justify-self: end;
+  align-self: end;
+  position: sticky;
+  bottom: 8px;
+  z-index: 5;
+  background: var(--surface);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 12px;
+  line-height: 1.2;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+  margin-right: 7px;
+  margin-bottom: 10px;
+}
+.token-badge .unit { opacity: 0.7; }
+
 .markdown-content {
   padding: 1.5rem;
   line-height: 1.7;
   font-size: .85rem;
+  /* 預留底部空間避免與 bottom-sticky 徽章重疊 */
+  padding-bottom: 2rem;
 }
 
 .markdown-content h1,
@@ -707,6 +750,7 @@ body {
   grid-template-columns: 56px 1fr;
   gap: 0.75rem;
   align-items: start;
+  position: relative; /* 讓內部 token-badge 可相對定位 */
 }
 
 .markdown-with-lines .line-gutter {

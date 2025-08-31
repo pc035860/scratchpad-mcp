@@ -34,7 +34,8 @@
     "marked": "^9.0.0",
     "marked-highlight": "^2.2.2",
     "openai": "^5.16.0",
-    "prismjs": "^1.29.0"
+    "prismjs": "^1.29.0",
+    "tiktoken": "^1.0.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.8",

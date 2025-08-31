@@ -11,11 +11,27 @@
     lineOrder: `viewer:${workflowId}:lineOrder`, // 'asc' | 'desc'
     autoRefresh: `viewer:${workflowId}:autoRefresh`, // '1' | '0'
     autoScroll: `viewer:${workflowId}:autoScroll`, // '1' | '0'
+    updateMode: `viewer:${workflowId}:updateMode`, // 'auto' | 'sse' | 'json' | 'html'
   };
 
   // Helpers
   const getPref = (k, def) => window.localStorage.getItem(k) ?? def;
   const setPref = (k, v) => window.localStorage.setItem(k, v);
+
+  // Focused scratchpad detection via URL (?sp= or hash #sp=)
+  function getFocusedScratchpadId() {
+    const u = new URL(window.location.href);
+    const fromQuery = u.searchParams.get('sp');
+    if (fromQuery) return fromQuery;
+    const hash = u.hash || '';
+    if (hash.startsWith('#')) {
+      try {
+        const p = new URLSearchParams(hash.slice(1));
+        return p.get('sp');
+      } catch {}
+    }
+    return null;
+  }
 
   function createControls() {
     const panel = document.createElement('div');
@@ -25,6 +41,7 @@
       <button id="toggle-line" class="toggle-btn" type="button" aria-pressed="false">行號: 正序</button>
       <button id="toggle-refresh" class="toggle-btn" type="button" aria-pressed="false" title="每隔數秒重新載入內容">自動刷新: 關</button>
       <button id="toggle-scroll" class="toggle-btn" type="button" aria-pressed="false" title="內容更新後自動捲到底部">自動捲動: 關</button>
+      <button id="toggle-focus" class="toggle-btn" type="button" aria-pressed="false" title="切換是否聚焦單一 scratchpad">聚焦: 關</button>
     `;
     // 將面板插入到 scratchpads 區塊，貼齊渲染容器
     const host = document.querySelector('.scratchpads-section') || detailEl;
@@ -64,6 +81,7 @@
     const lineBtn = panel.querySelector('#toggle-line');
     const refreshBtn = panel.querySelector('#toggle-refresh');
     const scrollBtn = panel.querySelector('#toggle-scroll');
+    const focusBtn = panel.querySelector('#toggle-focus');
 
     // Default: rendered view
     const initialView = getPref(`viewer:${workflowId}:view`, 'rendered');
@@ -87,6 +105,7 @@
     updateToggle(refreshBtn, initialRefresh);
     updateToggle(scrollBtn, initialScroll);
     updateLineToggleVisibility(initialView);
+    updateFocusBtn();
 
     applyViewMode(initialView);
     viewBtn.addEventListener('click', () => {
@@ -116,6 +135,30 @@
       const next = !cur;
       setPref(PREFS.autoScroll, next ? '1' : '0');
       updateToggle(scrollBtn, next);
+    });
+
+    // 聚焦切換：若未聚焦則預設聚焦至最後一個 scratchpad；若已聚焦則退出並回 workflow 級
+    focusBtn.addEventListener('click', () => {
+      const sid = getFocusedScratchpadId();
+      const url = new URL(window.location.href);
+      if (sid) {
+        // 退出聚焦：移除 ?sp / #sp
+        url.searchParams.delete('sp');
+        if (url.hash && url.hash.includes('sp=')) {
+          try {
+            const hs = new URLSearchParams(url.hash.slice(1));
+            hs.delete('sp');
+            url.hash = hs.toString() ? `#${hs.toString()}` : '';
+          } catch { url.hash = ''; }
+        }
+      } else {
+        // 進入聚焦：鎖定最後一個 scratchpad
+        const target = getLastScratchpadId();
+        if (!target) return;
+        url.searchParams.set('sp', target);
+      }
+      // 以重新載入啟動對應的更新流（簡化狀態切換與清理）
+      window.location.href = url.toString();
     });
   }
 
@@ -193,46 +236,243 @@
     });
   }
 
-  async function autoRefreshLoop() {
-    const intervalBase = 5000; // 5s
-    let sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-    let lastUpdated = detailEl.dataset.updatedAt || '';
+  function replaceScratchpadsWithHTML(html) {
+    // 解析回傳 HTML，若包含外層 #scratchpads-container，改為 child-level 置換避免巢狀
+    try {
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const newContainer = doc.getElementById('scratchpads-container');
+      if (newContainer) {
+        container.replaceChildren(...Array.from(newContainer.childNodes));
+      } else {
+        // 非完整文件情況，使用臨時容器取子節點
+        const tmp = document.createElement('div');
+        tmp.innerHTML = html;
+        const inner = tmp.querySelector('#scratchpads-container');
+        if (inner) {
+          container.replaceChildren(...Array.from(inner.childNodes));
+        } else {
+          // 後退保險：直接覆寫（理論上不會用到）
+          container.innerHTML = html;
+        }
+      }
+    } catch {
+      container.innerHTML = html;
+    }
+    renderLineNumbersForAll();
+    const currentView = getPref(`viewer:${workflowId}:view`, 'rendered');
+    applyViewMode(currentView);
+    updateLineToggleVisibility(currentView);
+    if (getPref(PREFS.autoScroll, '0') === '1') {
+      container.scrollTop = container.scrollHeight;
+      window.scrollTo({ top: document.body.scrollHeight });
+    }
+  }
+
+  async function fetchScratchpadsFragment() {
+    const resp = await fetch(`/api/workflow/${workflowId}/scratchpads`, { cache: 'no-store' });
+    if (!resp.ok) return null;
+    return await resp.text();
+  }
+
+  async function fetchScratchpadItemHtml(sid) {
+    const resp = await fetch(`/api/scratchpad/${sid}/html`, { cache: 'no-store' });
+    if (!resp.ok) return null;
+    return await resp.text();
+  }
+
+  async function jsonPollLoop() {
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    let lastUpdated = Number(detailEl.dataset.updatedAt || 0);
     while (true) {
       const enabled = getPref(PREFS.autoRefresh, '0') === '1';
-      if (!enabled) {
-        await sleep(intervalBase);
-        continue;
-      }
+      if (!enabled) { await sleep(5000); continue; }
       try {
-        const res = await fetch(window.location.href, { headers: { 'X-Partial': 'scratchpads' } });
-        const html = await res.text();
-        // Parse and extract scratchpads container
-        const doc = new DOMParser().parseFromString(html, 'text/html');
-        const newDetail = doc.querySelector('.workflow-detail');
-        const newUpdated = newDetail ? (newDetail.dataset.updatedAt || '') : '';
-        const newContainer = doc.getElementById('scratchpads-container');
-        if (newContainer && newUpdated && newUpdated !== lastUpdated) {
-          container.replaceChildren(...Array.from(newContainer.childNodes));
-          renderLineNumbersForAll();
-          // re-apply view mode after refresh
-          const currentView = getPref(`viewer:${workflowId}:view`, 'rendered');
-          applyViewMode(currentView);
-          updateLineToggleVisibility(currentView);
-          lastUpdated = newUpdated;
-          if (getPref(PREFS.autoScroll, '0') === '1') {
-            container.scrollTop = container.scrollHeight;
-            window.scrollTo({ top: document.body.scrollHeight });
+        const url = `/api/workflow/${workflowId}/summary?since=${lastUpdated}`;
+        const res = await fetch(url, { headers: { 'Accept': 'application/json' }, cache: 'no-store' });
+        if (res.status === 304) {
+          // no change
+        } else if (res.ok) {
+          const data = await res.json();
+          if (data.changed) {
+            const frag = await fetchScratchpadsFragment();
+            if (frag) replaceScratchpadsWithHTML(frag);
+            lastUpdated = data.updated_at;
           }
         }
-      } catch (e) {
-        // swallow errors to keep loop running
-      }
-      await sleep(intervalBase);
+      } catch {}
+      await sleep(5000);
+    }
+  }
+
+  function startSSE() {
+    let es;
+    try {
+      es = new EventSource(`/sse/workflow/${workflowId}`);
+    } catch {
+      return false;
+    }
+    let active = true;
+    const onUpdate = async (evt) => {
+      if (!active) return;
+      const frag = await fetchScratchpadsFragment();
+      if (frag) replaceScratchpadsWithHTML(frag);
+    };
+    es.addEventListener('update', onUpdate);
+    es.onerror = () => {
+      // 停用 SSE，回退 JSON
+      try { es.close(); } catch {}
+      active = false;
+      jsonPollLoop();
+    };
+    return true;
+  }
+
+  // 取得最後（最新）一個 scratchpad 的 ID
+  function getLastScratchpadId() {
+    const items = container.querySelectorAll('.scratchpad-item[data-scratchpad-id]');
+    if (!items.length) return null;
+    return items[items.length - 1].getAttribute('data-scratchpad-id');
+  }
+
+  // 更新聚焦按鈕狀態與文字
+  function updateFocusBtn() {
+    const btn = document.querySelector('.floating-controls #toggle-focus');
+    if (!btn) return;
+    const sid = getFocusedScratchpadId();
+    const enabled = !!sid;
+    btn.textContent = `聚焦: ${enabled ? '開（單一 scratchpad）' : '關'}`;
+    btn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+    btn.disabled = !enabled && !getLastScratchpadId();
+  }
+
+  // Replace a single scratchpad item by id
+  function replaceSingleScratchpadDom(sid, html) {
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    const newItem = tmp.querySelector('.scratchpad-item');
+    if (!newItem) return;
+    const oldItem = container.querySelector(`.scratchpad-item[data-scratchpad-id="${sid}"]`);
+    if (!oldItem) return;
+    oldItem.replaceWith(newItem);
+    renderLineNumbersForAll();
+    const currentView = getPref(`viewer:${workflowId}:view`, 'rendered');
+    applyViewMode(currentView);
+    updateLineToggleVisibility(currentView);
+    if (getPref(PREFS.autoScroll, '0') === '1') {
+      newItem.scrollIntoView({ block: 'end' });
+    }
+  }
+
+  function startScratchpadSSE(sid) {
+    let es;
+    try { es = new EventSource(`/sse/scratchpad/${sid}`); } catch { return false; }
+    let active = true;
+    es.addEventListener('update', async () => {
+      if (!active) return;
+      const html = await fetchScratchpadItemHtml(sid);
+      if (html) replaceSingleScratchpadDom(sid, html);
+    });
+    es.onerror = () => {
+      try { es.close(); } catch {}
+      active = false;
+      scratchpadJsonPoll(sid);
+    };
+    return true;
+  }
+
+  async function scratchpadJsonPoll(sid) {
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    let last = 0;
+    try {
+      // seed with current dom time if available (not tracked), so start with 0
+    } catch {}
+    while (true) {
+      const enabled = getPref(PREFS.autoRefresh, '0') === '1';
+      if (!enabled) { await sleep(5000); continue; }
+      try {
+        const res = await fetch(`/api/scratchpad/${sid}/summary?since=${last}`, { cache: 'no-store' });
+        if (res.status === 304) {
+          // no change
+        } else if (res.ok) {
+          const data = await res.json();
+          if (data.changed) {
+            const html = await fetchScratchpadItemHtml(sid);
+            if (html) replaceSingleScratchpadDom(sid, html);
+            last = data.updated_at;
+          }
+        }
+      } catch {}
+      await sleep(5000);
     }
   }
 
   // Initialize
   createControls();
   renderLineNumbersForAll();
-  autoRefreshLoop();
+  // 運行更新傳輸：優先 SSE，失敗回退 JSON，若瀏覽器不支援則仍可使用舊方案
+  const mode = getPref(PREFS.updateMode, 'auto');
+  const focusedSid = getFocusedScratchpadId();
+  const trySSE = () => {
+    try { return !!startSSE(); } catch { return false; }
+  };
+  if (focusedSid) {
+    // Scratchpad-focused transport
+    if (mode === 'sse' || mode === 'auto') {
+      if (!startScratchpadSSE(focusedSid)) scratchpadJsonPoll(focusedSid);
+    } else if (mode === 'json') {
+      scratchpadJsonPoll(focusedSid);
+    } else {
+      // html fallback uses workflow legacy loop (coarse)
+      jsonPollLoop();
+    }
+  } else if (mode === 'sse') {
+    if (!trySSE()) jsonPollLoop();
+  } else if (mode === 'json') {
+    jsonPollLoop();
+  } else if (mode === 'html') {
+    // 最末回退：保留原機制（整頁解析）
+    (async function legacyLoop(){
+      const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+      let lastUpdated = detailEl.dataset.updatedAt || '';
+      while (true) {
+        const enabled = getPref(PREFS.autoRefresh, '0') === '1';
+        if (!enabled) { await sleep(5000); continue; }
+        try {
+          const res = await fetch(window.location.href, { headers: { 'X-Partial': 'scratchpads' }, cache: 'no-store' });
+          const html = await res.text();
+          const doc = new DOMParser().parseFromString(html, 'text/html');
+          const newDetail = doc.querySelector('.workflow-detail');
+          const newUpdated = newDetail ? (newDetail.dataset.updatedAt || '') : '';
+          const newContainer = doc.getElementById('scratchpads-container');
+          if (newContainer && newUpdated && newUpdated !== lastUpdated) {
+            container.replaceChildren(...Array.from(newContainer.childNodes));
+            renderLineNumbersForAll();
+            const currentView = getPref(`viewer:${workflowId}:view`, 'rendered');
+            applyViewMode(currentView);
+            updateLineToggleVisibility(currentView);
+            lastUpdated = newUpdated;
+            if (getPref(PREFS.autoScroll, '0') === '1') {
+              container.scrollTop = container.scrollHeight;
+              window.scrollTo({ top: document.body.scrollHeight });
+            }
+          }
+        } catch {}
+        await sleep(5000);
+      }
+    })();
+  } else {
+    // auto 模式
+    if (!trySSE()) jsonPollLoop();
+  }
+
+  // 事件委派：點擊每個 scratchpad 的「專注」按鈕
+  container.addEventListener('click', (e) => {
+    const btn = e.target.closest('.btn-focus');
+    if (!btn) return;
+    const sid = btn.getAttribute('data-scratchpad-id');
+    if (!sid) return;
+    const url = new URL(window.location.href);
+    url.searchParams.set('sp', sid);
+    window.location.href = url.toString();
+  });
 })();

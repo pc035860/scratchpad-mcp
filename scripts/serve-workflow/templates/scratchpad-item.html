@@ -1,9 +1,12 @@
-<div class="scratchpad-item" data-title="{{scratchpad.title}}">
+<div class="scratchpad-item" data-title="{{scratchpad.title}}" data-scratchpad-id="{{scratchpad.id}}">
   <div class="scratchpad-header">
     <h3 class="scratchpad-title">🗒️ {{scratchpad.title}}</h3>
     <div class="scratchpad-meta">
       <span class="meta-item">📏 {{scratchpad.sizeDisplay}}</span>
       <span class="meta-item">🕒 {{scratchpad.relativeTime}}</span>
+    </div>
+    <div class="scratchpad-controls">
+      <button class="btn-focus" data-scratchpad-id="{{scratchpad.id}}" type="button" title="專注檢視此 scratchpad">專注</button>
     </div>
   </div>
   <div class="markdown-with-lines" data-line-count="{{scratchpad.lineCount}}" data-raw-b64="{{scratchpad.rawB64}}">
@@ -11,5 +14,6 @@
     <div class="markdown-content">
       {{scratchpad.contentHtml}}
     </div>
+    {{scratchpad.tokenBadge}}
   </div>
 </div>
