@@ -482,8 +482,8 @@ async function handleWorkflowDetail(req, res, params) {
       return;
     }
 
-    const scratchpads = workflowDB.getScratchpadsByWorkflowId(workflowId);
-    const projectScopes = workflowDB.getProjectScopes();
+  const scratchpads = workflowDB.getScratchpadsByWorkflowId(workflowId);
+  const projectScopes = workflowDB.getProjectScopes();
 
     // 準備模板資料
     const templateData = {
@@ -499,6 +499,7 @@ async function handleWorkflowDetail(req, res, params) {
         projectScopeDisplay: escapeHtml(workflow.project_scope || '未分類'),
         createdTime: formatTimestamp(workflow.created_at),
         updatedTime: formatTimestamp(workflow.updated_at),
+        updatedAt: escapeHtml(String(workflow.updated_at || '')),
         descriptionHtml: workflow.description ? 
           `<p class="workflow-description">${escapeHtml(workflow.description)}</p>` : ''
       },
@@ -510,11 +511,17 @@ async function handleWorkflowDetail(req, res, params) {
       scratchpadSearchHtml: scratchpads.length > 1 ? 
         '<input type="text" id="scratchpad-search" placeholder="搜尋 scratchpad 標題..." class="scratchpad-search">' : '',
       scratchpadItems: scratchpads.map(scratchpad => {
+        const lineCount = typeof scratchpad.content === 'string'
+          ? (scratchpad.content.split('\n').length)
+          : 0;
+        const rawB64 = Buffer.from(String(scratchpad.content || ''), 'utf8').toString('base64');
         const itemData = {
           scratchpad: {
             title: escapeHtml(scratchpad.title),
             sizeDisplay: formatBytes(scratchpad.size_bytes),
             relativeTime: formatRelativeTime(scratchpad.updated_at),
+            lineCount,
+            rawB64: rawB64,
             contentHtml: marked(scratchpad.content)
           }
         };

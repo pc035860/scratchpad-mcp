@@ -6,7 +6,10 @@
       <span class="meta-item">🕒 {{scratchpad.relativeTime}}</span>
     </div>
   </div>
-  <div class="markdown-content">
-    {{scratchpad.contentHtml}}
+  <div class="markdown-with-lines" data-line-count="{{scratchpad.lineCount}}" data-raw-b64="{{scratchpad.rawB64}}">
+    <div class="line-gutter" aria-hidden="true"></div>
+    <div class="markdown-content">
+      {{scratchpad.contentHtml}}
+    </div>
   </div>
 </div>

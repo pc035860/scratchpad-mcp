@@ -419,6 +419,7 @@ body {
 
 /* Scratchpads 區塊 */
 .scratchpads-section {
+  position: relative; /* 供面板絕對定位參考 */
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -640,3 +641,112 @@ body {
     max-width: none;
   }
 }
+
+/* 浮動控制面板 */
+.floating-controls {
+  position: absolute; /* 初始放置；JS 會切換為 fixed 以提供浮動效果 */
+  top: 0;
+  left: calc(100% + 1rem);
+  z-index: 20;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: stretch;
+  min-width: 140px;
+  max-width: 200px;
+  box-sizing: border-box;
+}
+
+.floating-controls .toggle-btn {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+}
+
+.floating-controls .toggle-btn[aria-pressed="true"] {
+  background: var(--primary-color);
+  color: #fff;
+  border-color: var(--primary-color);
+}
+
+.floating-controls .toggle-label {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.floating-controls label {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.floating-controls select,
+.floating-controls input[type="checkbox"] {
+  margin-left: 0.25rem;
+}
+
+/* Markdown 行號布局 */
+.markdown-with-lines {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: 0.75rem;
+  align-items: start;
+}
+
+.markdown-with-lines .line-gutter {
+  position: sticky;
+  top: 0.5rem;
+  height: max-content;
+  /* 移除 max-height 與 overflow 限制，避免僅顯示 ~54 行的截斷 */
+  color: var(--text-secondary);
+  font-family: 'Monaco', 'Consolas', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  user-select: none;
+  border-right: 1px solid var(--border);
+  padding-right: 0.5rem;
+}
+
+.line-gutter .line-num {
+  display: block;
+  text-align: right;
+  padding-right: 0.25rem;
+}
+
+/* 在渲染視圖下隱藏行號並還原單欄佈局 */
+body.view-rendered .markdown-with-lines {
+  grid-template-columns: 1fr;
+  gap: 0;
+}
+body.view-rendered .markdown-with-lines .line-gutter {
+  display: none;
+}
+
+/* 原始視圖下的文字與行高對齊設定 */
+.raw-view {
+  white-space: pre;
+  font-family: 'Monaco', 'Consolas', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* 渲染/原始 視圖切換下的顯示控制（預設顯示渲染內容） */
+body.view-raw .markdown-with-lines .markdown-content { display: none; }
+body.view-rendered .markdown-with-lines .raw-view { display: none; }
