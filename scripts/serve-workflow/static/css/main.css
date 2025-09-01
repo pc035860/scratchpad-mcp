@@ -532,6 +532,8 @@ body {
   font-size: .85rem;
   /* 預留底部空間避免與 bottom-sticky 徽章重疊 */
   padding-bottom: 2rem;
+  min-width: 0; /* 確保內容不會強制擴展容器 */
+  overflow: auto; /* 處理潛在的內容溢出 */
 }
 
 .markdown-content h1,
@@ -751,6 +753,7 @@ body {
   gap: 0.75rem;
   align-items: start;
   position: relative; /* 讓內部 token-badge 可相對定位 */
+  min-width: 0; /* 防止 Grid 欄位被內容強制擴展 */
 }
 
 .markdown-with-lines .line-gutter {
@@ -789,6 +792,9 @@ body.view-rendered .markdown-with-lines .line-gutter {
   font-size: 12px;
   line-height: 1.5;
   margin: 0;
+  grid-column: 2; /* 確保對齊到 Grid 第二欄，避免與行號重疊 */
+  overflow-x: auto; /* 提供水平滾動功能處理長行 */
+  max-width: 100%; /* 確保不超出父容器寬度 */
 }
 
 /* 渲染/原始 視圖切換下的顯示控制（預設顯示渲染內容） */

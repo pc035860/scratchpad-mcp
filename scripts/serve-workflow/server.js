@@ -16,9 +16,17 @@
  * - 環境變數：export SCRATCHPAD_DB_PATH="/path/to/database.db"
  * - 命令列參數：--db-path "/path/to/database.db"
  *
+ * 靜態文件緩存策略：
+ * - 開發模式（--dev）：完全禁用緩存，文件修改立即生效
+ * - 生產模式：智慧緩存策略，基於文件修改時間的 ETag 條件請求
+ *   * 緩存時間：5 分鐘（而非傳統的 1 小時）
+ *   * 文件修改後 ETag 變化，瀏覽器自動獲取新版本
+ *   * 未修改文件返回 304 狀態碼，節省帶寬
+ *
  * 範例：
  * - SCRATCHPAD_DB_PATH="/var/data/scratchpad.db" npm run serve
  * - node scripts/serve-workflow/server.js --db-path "/tmp/test.db" --port 3001
+ * - node scripts/serve-workflow/server.js --dev  # 開發模式，禁用靜態文件緩存
  */
 
 import http from 'http';
@@ -486,6 +494,20 @@ async function handleStaticFile(req, res, pathname) {
       return handleNotFound(res, '檔案不存在');
     }
 
+    // 生成基於文件修改時間和大小的 ETag
+    const etag = `"${stats.mtime.getTime()}-${stats.size}"`;
+    
+    // 檢查條件請求：如果文件沒有變化，返回 304
+    const ifNoneMatch = req.headers['if-none-match'];
+    if (ifNoneMatch === etag) {
+      res.writeHead(304, { 
+        'ETag': etag,
+        'Last-Modified': stats.mtime.toUTCString()
+      });
+      res.end();
+      return;
+    }
+
     // 設定 Content-Type
     const ext = path.extname(filePath).toLowerCase();
     const contentTypes = {
@@ -501,9 +523,16 @@ async function handleStaticFile(req, res, pathname) {
 
     const contentType = contentTypes[ext] || 'application/octet-stream';
 
+    // 智慧緩存策略：開發模式完全禁用，生產模式使用短期緩存+條件請求
+    const cacheControl = isDev 
+      ? 'no-cache, no-store, must-revalidate' 
+      : 'public, max-age=300'; // 5分鐘而非1小時
+
     res.writeHead(200, {
       'Content-Type': contentType,
-      'Cache-Control': isDev ? 'no-cache' : 'public, max-age=3600',
+      'Cache-Control': cacheControl,
+      'ETag': etag,
+      'Last-Modified': stats.mtime.toUTCString(),
     });
 
     const fileStream = fs.createReadStream(filePath);
