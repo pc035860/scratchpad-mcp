@@ -87,7 +87,7 @@ const formatScratchpad = (
     formatted.content = formatted.content.substring(0, options.max_content_chars) + '...（截斷）';
     formatted.content_truncated = true;
     formatted.original_size = originalLength;
-    formatted.content_control_applied = `truncated to ${options.max_content_chars} chars`;
+    formatted.content_control_applied = `truncated to ${options.max_content_chars} chars - use higher max_content_chars for more, or tail-scratchpad with full_content=true for complete content`;
   }
 
   return formatted;
@@ -392,6 +392,8 @@ export const tailScratchpadTool = (
 
       if (!includeContent) {
         message += ' - Content excluded (include_content=false)';
+      } else if (!isFullContent && tailLines < totalLines) {
+        message += ' - use full_content=true for complete content';
       }
 
       return {

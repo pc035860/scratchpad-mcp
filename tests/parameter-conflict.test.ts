@@ -163,7 +163,7 @@ describe('Parameter Conflict Detection and Smart Defaults', () => {
 
       expect(result.message).toBeDefined();
       expect(result.message).toContain('Content control: truncated to 300 chars');
-      expect(result.scratchpad!.content_control_applied).toBe('truncated to 300 chars');
+      expect(result.scratchpad!.content_control_applied).toBe('truncated to 300 chars - use higher max_content_chars for more, or tail-scratchpad with full_content=true for complete content');
     });
 
     it('should provide clear status messages for preview mode', async () => {

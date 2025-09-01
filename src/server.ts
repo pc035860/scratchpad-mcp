@@ -298,7 +298,7 @@ class ScratchpadMCPServer {
           {
             name: 'get-scratchpad',
             description:
-              'Retrieve a scratchpad by its ID. Use preview_mode for quick overview, max_content_chars to limit size, or include_content=false for metadata only.',
+              'Retrieve a scratchpad by its ID (content truncated to 2000 chars by default). Use max_content_chars to adjust limit, preview_mode for quick overview, or include_content=false for metadata only.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -352,7 +352,7 @@ class ScratchpadMCPServer {
           {
             name: 'tail-scratchpad',
             description:
-              'Get tail content from scratchpad, or full content with full_content=true. Supports flexible content extraction modes.',
+              'Get tail content from scratchpad (default: last 50 lines), or full content with full_content=true. Use include_content=false for metadata only.',
             inputSchema: {
               type: 'object',
               properties: {
