@@ -464,6 +464,9 @@ body {
 }
 
 .scratchpad-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
   background: var(--background);
   padding: 1rem 1.5rem;
   border-bottom: 1px solid var(--border);
@@ -472,6 +475,8 @@ body {
   align-items: center;
   gap: 1rem;
   flex-wrap: wrap;
+  /* 增加微妙陰影，讓 sticky 效果更明顯 */
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
 
 .scratchpad-title {

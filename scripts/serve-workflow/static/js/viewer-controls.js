@@ -58,7 +58,9 @@
         panel.style.position = 'fixed';
         panel.style.left = desiredLeft + 'px';
         // 讓面板大致與容器頂對齊，並在視窗內夾取
-        const desiredTop = Math.round(Math.max(16, Math.min(rect.top, window.innerHeight - (panel.offsetHeight || 0) - 16)));
+        const desiredTop = Math.round(
+          Math.max(16, Math.min(rect.top, window.innerHeight - (panel.offsetHeight || 0) - 16))
+        );
         panel.style.top = desiredTop + 'px';
         panel.style.right = '';
         panel.style.marginLeft = '';
@@ -66,7 +68,8 @@
         // 空間不足，退回容器內側右上角（sticky 效果）
         panel.style.position = 'sticky';
         panel.style.left = '';
-        panel.style.top = '1rem';
+        // 當退回容器內側時，調整 top 位置避免與 sticky header 重疊
+        panel.style.top = '3.7rem';
         panel.style.right = '';
         panel.style.marginLeft = 'auto';
       }
@@ -149,7 +152,9 @@
             const hs = new URLSearchParams(url.hash.slice(1));
             hs.delete('sp');
             url.hash = hs.toString() ? `#${hs.toString()}` : '';
-          } catch { url.hash = ''; }
+          } catch {
+            url.hash = '';
+          }
         }
       } else {
         // 進入聚焦：鎖定最後一個 scratchpad
@@ -285,10 +290,16 @@
     let lastUpdated = Number(detailEl.dataset.updatedAt || 0);
     while (true) {
       const enabled = getPref(PREFS.autoRefresh, '0') === '1';
-      if (!enabled) { await sleep(5000); continue; }
+      if (!enabled) {
+        await sleep(5000);
+        continue;
+      }
       try {
         const url = `/api/workflow/${workflowId}/summary?since=${lastUpdated}`;
-        const res = await fetch(url, { headers: { 'Accept': 'application/json' }, cache: 'no-store' });
+        const res = await fetch(url, {
+          headers: { Accept: 'application/json' },
+          cache: 'no-store',
+        });
         if (res.status === 304) {
           // no change
         } else if (res.ok) {
@@ -320,7 +331,9 @@
     es.addEventListener('update', onUpdate);
     es.onerror = () => {
       // 停用 SSE，回退 JSON
-      try { es.close(); } catch {}
+      try {
+        es.close();
+      } catch {}
       active = false;
       jsonPollLoop();
     };
@@ -365,7 +378,11 @@
 
   function startScratchpadSSE(sid) {
     let es;
-    try { es = new EventSource(`/sse/scratchpad/${sid}`); } catch { return false; }
+    try {
+      es = new EventSource(`/sse/scratchpad/${sid}`);
+    } catch {
+      return false;
+    }
     let active = true;
     es.addEventListener('update', async () => {
       if (!active) return;
@@ -373,7 +390,9 @@
       if (html) replaceSingleScratchpadDom(sid, html);
     });
     es.onerror = () => {
-      try { es.close(); } catch {}
+      try {
+        es.close();
+      } catch {}
       active = false;
       scratchpadJsonPoll(sid);
     };
@@ -388,9 +407,14 @@
     } catch {}
     while (true) {
       const enabled = getPref(PREFS.autoRefresh, '0') === '1';
-      if (!enabled) { await sleep(5000); continue; }
+      if (!enabled) {
+        await sleep(5000);
+        continue;
+      }
       try {
-        const res = await fetch(`/api/scratchpad/${sid}/summary?since=${last}`, { cache: 'no-store' });
+        const res = await fetch(`/api/scratchpad/${sid}/summary?since=${last}`, {
+          cache: 'no-store',
+        });
         if (res.status === 304) {
           // no change
         } else if (res.ok) {
@@ -413,7 +437,11 @@
   const mode = getPref(PREFS.updateMode, 'auto');
   const focusedSid = getFocusedScratchpadId();
   const trySSE = () => {
-    try { return !!startSSE(); } catch { return false; }
+    try {
+      return !!startSSE();
+    } catch {
+      return false;
+    }
   };
   if (focusedSid) {
     // Scratchpad-focused transport
@@ -431,18 +459,24 @@
     jsonPollLoop();
   } else if (mode === 'html') {
     // 最末回退：保留原機制（整頁解析）
-    (async function legacyLoop(){
+    (async function legacyLoop() {
       const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       let lastUpdated = detailEl.dataset.updatedAt || '';
       while (true) {
         const enabled = getPref(PREFS.autoRefresh, '0') === '1';
-        if (!enabled) { await sleep(5000); continue; }
+        if (!enabled) {
+          await sleep(5000);
+          continue;
+        }
         try {
-          const res = await fetch(window.location.href, { headers: { 'X-Partial': 'scratchpads' }, cache: 'no-store' });
+          const res = await fetch(window.location.href, {
+            headers: { 'X-Partial': 'scratchpads' },
+            cache: 'no-store',
+          });
           const html = await res.text();
           const doc = new DOMParser().parseFromString(html, 'text/html');
           const newDetail = doc.querySelector('.workflow-detail');
-          const newUpdated = newDetail ? (newDetail.dataset.updatedAt || '') : '';
+          const newUpdated = newDetail ? newDetail.dataset.updatedAt || '' : '';
           const newContainer = doc.getElementById('scratchpads-container');
           if (newContainer && newUpdated && newUpdated !== lastUpdated) {
             container.replaceChildren(...Array.from(newContainer.childNodes));
