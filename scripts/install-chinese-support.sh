@@ -83,7 +83,7 @@ fi
 
 # Try to prepare jieba dictionaries if available
 echo "📚 Checking jieba dictionaries..."
-if [[ ! -d "extensions/dict" ]]; then
+if [[ ! -f "extensions/dict/jieba.dict.utf8" ]]; then
   # Find dict directory in extracted files and copy to standard location
   FOUND_DICT=""
   while IFS= read -r d; do
@@ -91,6 +91,8 @@ if [[ ! -d "extensions/dict" ]]; then
     break
   done < <(find extensions -maxdepth 3 -type d -name "dict" 2>/dev/null | head -n 1)
   if [[ -n "$FOUND_DICT" && "$FOUND_DICT" != "extensions/dict" ]]; then
+    echo "📂 Copying dictionary files from $FOUND_DICT to extensions/dict"
+    rm -rf extensions/dict  # Remove incomplete dictionary if exists
     cp -R "$FOUND_DICT" extensions/dict
   fi
 fi
