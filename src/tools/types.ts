@@ -267,6 +267,25 @@ export interface SearchScratchpadsArgs extends Partial<OutputControlOptions> {
   query: string;
   workflow_id?: string;
   useJieba?: boolean; // Force jieba tokenization (auto-detect by default)
+  
+  // Context lines parameters for enhanced search results
+  /** Number of lines to show before each match */
+  context_lines_before?: number;
+  
+  /** Number of lines to show after each match */
+  context_lines_after?: number;
+  
+  /** Number of lines to show both before and after each match (shorthand) */
+  context_lines?: number;
+  
+  /** Maximum number of matches to show context for (default: 5) */
+  max_context_matches?: number;
+  
+  /** Whether to merge overlapping context ranges (default: true) */
+  merge_context?: boolean;
+  
+  /** Whether to show line numbers in context output */
+  show_line_numbers?: boolean;
 }
 
 export interface SearchScratchpadsResult {

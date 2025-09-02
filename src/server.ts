@@ -465,7 +465,7 @@ class ScratchpadMCPServer {
           {
             name: 'search-scratchpads',
             description:
-              'Search for scratchpads using full-text search with FTS5 or LIKE fallback. Content control same as list-scratchpads: include_content > preview_mode > max_content_chars.',
+              'Search for scratchpads using full-text search with FTS5 or LIKE fallback. Supports context-aware search similar to grep -A -B -C. Content control same as list-scratchpads: include_content > preview_mode > max_content_chars.\n\nUSAGE EXAMPLES:\n• Basic search: {"query": "authentication"}\n• Context search: {"query": "error", "context_lines": 3} - Shows 3 lines before/after each match\n• Asymmetric context: {"query": "function", "context_lines_before": 2, "context_lines_after": 5}\n• With line numbers: {"query": "bug", "context_lines": 2, "show_line_numbers": true}\n• Limit matches: {"query": "TODO", "context_lines": 1, "max_context_matches": 3}\n• No merging: {"query": "import", "context_lines": 1, "merge_context": false}',
             inputSchema: {
               type: 'object',
               properties: {
@@ -504,6 +504,38 @@ class ScratchpadMCPServer {
                 useJieba: {
                   type: 'boolean',
                   description: 'Force jieba tokenization (auto-detect by default)',
+                },
+                context_lines_before: {
+                  type: 'number',
+                  description: 'Number of lines to show before each match (0-50)',
+                  minimum: 0,
+                  maximum: 50,
+                },
+                context_lines_after: {
+                  type: 'number',
+                  description: 'Number of lines to show after each match (0-50)',
+                  minimum: 0,
+                  maximum: 50,
+                },
+                context_lines: {
+                  type: 'number',
+                  description: 'Number of lines to show both before and after each match (shorthand, 0-50)',
+                  minimum: 0,
+                  maximum: 50,
+                },
+                max_context_matches: {
+                  type: 'number',
+                  description: 'Maximum number of matches to show context for (default: 5, max: 20)',
+                  minimum: 1,
+                  maximum: 20,
+                },
+                merge_context: {
+                  type: 'boolean',
+                  description: 'Whether to merge overlapping context ranges (default: true)',
+                },
+                show_line_numbers: {
+                  type: 'boolean',
+                  description: 'Whether to show line numbers in context output',
                 },
               },
               required: ['query'],
