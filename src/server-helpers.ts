@@ -291,6 +291,69 @@ export function validateSearchScratchpadsArgs(args: unknown): SearchScratchpadsA
     result.useJieba = obj['useJieba'];
   }
 
+  // Context lines parameters
+  if (obj['context_lines_before'] !== undefined) {
+    if (
+      typeof obj['context_lines_before'] !== 'number' ||
+      !Number.isInteger(obj['context_lines_before']) ||
+      obj['context_lines_before'] < 0 ||
+      obj['context_lines_before'] > 50
+    ) {
+      throw new Error('Invalid arguments: context_lines_before must be an integer between 0 and 50');
+    }
+    result.context_lines_before = obj['context_lines_before'];
+  }
+
+  if (obj['context_lines_after'] !== undefined) {
+    if (
+      typeof obj['context_lines_after'] !== 'number' ||
+      !Number.isInteger(obj['context_lines_after']) ||
+      obj['context_lines_after'] < 0 ||
+      obj['context_lines_after'] > 50
+    ) {
+      throw new Error('Invalid arguments: context_lines_after must be an integer between 0 and 50');
+    }
+    result.context_lines_after = obj['context_lines_after'];
+  }
+
+  if (obj['context_lines'] !== undefined) {
+    if (
+      typeof obj['context_lines'] !== 'number' ||
+      !Number.isInteger(obj['context_lines']) ||
+      obj['context_lines'] < 0 ||
+      obj['context_lines'] > 50
+    ) {
+      throw new Error('Invalid arguments: context_lines must be an integer between 0 and 50');
+    }
+    result.context_lines = obj['context_lines'];
+  }
+
+  if (obj['max_context_matches'] !== undefined) {
+    if (
+      typeof obj['max_context_matches'] !== 'number' ||
+      !Number.isInteger(obj['max_context_matches']) ||
+      obj['max_context_matches'] < 1 ||
+      obj['max_context_matches'] > 20
+    ) {
+      throw new Error('Invalid arguments: max_context_matches must be an integer between 1 and 20');
+    }
+    result.max_context_matches = obj['max_context_matches'];
+  }
+
+  if (obj['merge_context'] !== undefined) {
+    if (typeof obj['merge_context'] !== 'boolean') {
+      throw new Error('Invalid arguments: merge_context must be a boolean');
+    }
+    result.merge_context = obj['merge_context'];
+  }
+
+  if (obj['show_line_numbers'] !== undefined) {
+    if (typeof obj['show_line_numbers'] !== 'boolean') {
+      throw new Error('Invalid arguments: show_line_numbers must be a boolean');
+    }
+    result.show_line_numbers = obj['show_line_numbers'];
+  }
+
   return result;
 }
 

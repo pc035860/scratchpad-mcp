@@ -121,7 +121,7 @@ export OPENAI_API_KEY="your-openai-api-key"
 - `tail-scratchpad` - Tail content, or set `full_content=true` to get full content
 - `chop-scratchpad` - Remove lines from the end of a scratchpad (reverse of tail)
 - `list-scratchpads` - List scratchpads in a workflow
-- `search-scratchpads` - Full-text search (with intelligent Chinese tokenization)
+- `search-scratchpads` - Full-text search with context-aware snippets (grep-like functionality, intelligent Chinese tokenization)
 - `extract-workflow-info` - Extract specific information from workflows using OpenAI models
 
 ---
@@ -471,7 +471,7 @@ Content control priority: `include_content` > `preview_mode` > `max_content_char
 
 #### `search-scratchpads`
 
-Full-text search with automatic Chinese tokenization and graceful fallbacks.
+Full-text search with automatic Chinese tokenization and graceful fallbacks. Supports context-aware search similar to grep -A -B -C.
 
 ```typescript
 {
@@ -483,10 +483,18 @@ Full-text search with automatic Chinese tokenization and graceful fallbacks.
   max_content_chars?: number;
   include_content?: boolean;
   useJieba?: boolean;     // defaults to auto detection
+  
+  // Context search parameters (grep-like functionality)
+  context_lines_before?: number;    // lines before match (0-50)
+  context_lines_after?: number;     // lines after match (0-50)
+  context_lines?: number;           // symmetric context (0-50, takes precedence)
+  max_context_matches?: number;     // limit matches processed (1-20, default: 5)
+  merge_context?: boolean;          // merge overlapping ranges (default: true)
+  show_line_numbers?: boolean;      // show line numbers (default: false)
 }
 ```
 
-Search intelligence: automatic detection → jieba → simple → FTS5 → LIKE; target <100ms.
+Search intelligence: automatic detection → jieba → simple → FTS5 → LIKE; target <100ms. Context search provides grep-like functionality with line-based snippets.
 
 ### AI Analysis
 
@@ -545,25 +553,49 @@ const manualResults = await callTool('search-scratchpads', {
   limit: 10,
 });
 
-// 5) Append mixed-language content
+// 5) Context search - basic (like grep -C 3)
+const contextResults = await callTool('search-scratchpads', {
+  query: 'error',
+  context_lines: 3,
+  workflow_id: workflow.id,
+});
+
+// 6) Context search - asymmetric (like grep -B 2 -A 5)
+const asymmetricResults = await callTool('search-scratchpads', {
+  query: 'function',
+  context_lines_before: 2,
+  context_lines_after: 5,
+  show_line_numbers: true,
+});
+
+// 7) Context search - with match limits and line numbers
+const limitedResults = await callTool('search-scratchpads', {
+  query: 'TODO',
+  context_lines: 1,
+  max_context_matches: 3,
+  show_line_numbers: true,
+  merge_context: false,
+});
+
+// 8) Append mixed-language content
 await callTool('append-scratchpad', {
   id: scratchpad.id,
   content: '\n\n## Additional Findings\n\nFrom paper XYZ: 新發現...',
 });
 
-// 6) Get full content via tail-scratchpad (alternative to get-scratchpad)
+// 9) Get full content via tail-scratchpad (alternative to get-scratchpad)
 const fullContent = await callTool('tail-scratchpad', {
   id: scratchpad.id,
   full_content: true,
 });
 
-// 7) Traditional tail mode
+// 10) Traditional tail mode
 const recentContent = await callTool('tail-scratchpad', {
   id: scratchpad.id,
   tail_size: { lines: 10 },
 });
 
-// 8) Full content but metadata only
+// 11) Full content but metadata only
 const controlledContent = await callTool('tail-scratchpad', {
   id: scratchpad.id,
   full_content: true,
