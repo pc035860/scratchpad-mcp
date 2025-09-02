@@ -53,11 +53,15 @@ export class ScratchpadDatabase {
 
       // 測試 simple 函數是否可用
       const rawTestResult = this.db.prepare("SELECT simple_query('test') as result").get();
-      const testResult = assertVersionResult(rawTestResult, 'loadSimpleTokenizer simple test');
-
-      if (testResult?.result) {
+      
+      // 直接檢查結果而不使用 assertVersionResult（它期望 value 欄位但我們有 result 欄位）
+      if (rawTestResult && typeof rawTestResult === 'object' && 
+          'result' in rawTestResult && typeof rawTestResult.result === 'string' && 
+          rawTestResult.result.length > 0) {
         this.hasSimpleTokenizer = true;
         console.log('✅ Simple 中文分詞擴展載入成功');
+      } else {
+        throw new Error('simple_query returned invalid result');
       }
     } catch (error) {
       console.warn(
@@ -351,8 +355,11 @@ export class ScratchpadDatabase {
           try {
             // 測試 jieba_query() 是否正常工作 - 使用更安全的測試方式
             const rawTestResult = this.db.prepare("SELECT jieba_query('test') as result").get();
-            const testResult = assertVersionResult(rawTestResult, 'jieba tokenizer test');
-            if (testResult?.result) {
+            
+            // 直接檢查結果而不使用 assertVersionResult
+            if (rawTestResult && typeof rawTestResult === 'object' && 
+                'result' in rawTestResult && typeof rawTestResult.result === 'string' && 
+                rawTestResult.result.length > 0) {
               this.hasJiebaTokenizer = true;
               console.log('✅ Jieba 結巴分詞功能完全可用');
             } else {
