@@ -79,7 +79,7 @@ describe('ScratchpadDatabase', () => {
         content: '\nAppended content',
       });
 
-      expect(updated.content).toBe('Initial content\n\n---\n\nAppended content');
+      expect(updated.content).toBe('Initial content\n\n---\n<!--- block start --->\n\nAppended content');
       expect(updated.updated_at).toBeGreaterThanOrEqual(scratchpad.updated_at);
     });
 
@@ -223,19 +223,19 @@ describe('ScratchpadDatabase', () => {
         id: scratchpad.id,
         content: '\nFirst append',
       });
-      expect(append1.content).toBe('Initial content\n\n---\n\nFirst append');
+      expect(append1.content).toBe('Initial content\n\n---\n<!--- block start --->\n\nFirst append');
 
       const append2 = db.appendToScratchpad({
         id: append1.id,
         content: '\nSecond append',
       });
-      expect(append2.content).toBe('Initial content\n\n---\n\nFirst append\n\n---\n\nSecond append');
+      expect(append2.content).toBe('Initial content\n\n---\n<!--- block start --->\n\nFirst append\n\n---\n<!--- block start --->\n\nSecond append');
 
       const append3 = db.appendToScratchpad({
         id: append2.id,
         content: '\nThird append',
       });
-      expect(append3.content).toBe('Initial content\n\n---\n\nFirst append\n\n---\n\nSecond append\n\n---\n\nThird append');
+      expect(append3.content).toBe('Initial content\n\n---\n<!--- block start --->\n\nFirst append\n\n---\n<!--- block start --->\n\nSecond append\n\n---\n<!--- block start --->\n\nThird append');
       
       // 驗證更新時間有正確遞增
       expect(append3.updated_at).toBeGreaterThanOrEqual(append2.updated_at);

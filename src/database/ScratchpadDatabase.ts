@@ -598,8 +598,8 @@ export class ScratchpadDatabase {
       );
     }
 
-    // 智慧添加 markdown 分隔模板：兩個空行 + 分隔線 + 一個空行
-    const appendTemplate = '\n\n---\n';
+    // Block-based 分隔模板：兩個空行 + 分隔線 + block 標記
+    const appendTemplate = '\n\n---\n<!--- block start --->\n';
     const newContent =
       existing.content.trim() === ''
         ? params.content // 首次 append 不需要分隔符

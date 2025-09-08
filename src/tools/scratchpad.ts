@@ -2,6 +2,7 @@
  * Scratchpad CRUD tools
  */
 import type { ScratchpadDatabase } from '../database/index.js';
+import { BlockParser } from '../utils/BlockParser.js';
 import type {
   EnhancedUpdateScratchpadArgs,
   EnhancedUpdateScratchpadResult,
@@ -554,6 +555,13 @@ export const tailScratchpadTool = (
           tailChars = tailContent.length;
           tailLines = tailContent.split('\n').length;
           extractionMethod = `last ${chars} chars`;
+        } else if ('blocks' in args.tail_size) {
+          // Extract by block count using BlockParser
+          const blocks = args.tail_size.blocks;
+          tailContent = BlockParser.getBlockRange(content, blocks, true); // fromEnd = true
+          tailChars = tailContent.length;
+          tailLines = tailContent.split('\n').length;
+          extractionMethod = `last ${blocks} block(s)`;
         } else {
           // Extract by line count
           const lines = args.tail_size.lines;
@@ -659,16 +667,40 @@ export const chopScratchpadTool = (
         };
       }
 
-      const contentLines = content.split('\n');
-      const totalLines = contentLines.length;
+      let newContent: string;
+      let choppedMessage: string;
+      let choppedLines: number = 0;
 
-      // Default to removing 1 line if not specified
-      const linesToChop = args.lines ?? 1;
-      const actualChoppedLines = Math.min(linesToChop, totalLines);
-
-      // Calculate the lines to keep (from the beginning)
-      const linesToKeep = Math.max(0, totalLines - actualChoppedLines);
-      const newContent = contentLines.slice(0, linesToKeep).join('\n');
+      if (args.blocks !== undefined) {
+        // Handle block-based chopping using BlockParser
+        const blocksToChop = args.blocks;
+        const totalBlocks = BlockParser.getBlockCount(content);
+        const actualChoppedBlocks = Math.min(blocksToChop, totalBlocks);
+        
+        newContent = BlockParser.chopBlocks(content, actualChoppedBlocks);
+        
+        // Calculate lines for reporting
+        const originalLines = content.split('\n').length;
+        const remainingLines = newContent.split('\n').length;
+        choppedLines = originalLines - remainingLines;
+        
+        choppedMessage = `Chopped ${actualChoppedBlocks} block(s) from scratchpad "${scratchpad.title}" (${totalBlocks} → ${totalBlocks - actualChoppedBlocks} blocks, ${choppedLines} lines removed)`;
+      } else {
+        // Handle line-based chopping (existing logic)
+        const contentLines = content.split('\n');
+        const totalLines = contentLines.length;
+        
+        // Default to removing 1 line if not specified
+        const linesToChop = args.lines ?? 1;
+        const actualChoppedLines = Math.min(linesToChop, totalLines);
+        
+        // Calculate the lines to keep (from the beginning)
+        const linesToKeep = Math.max(0, totalLines - actualChoppedLines);
+        newContent = contentLines.slice(0, linesToKeep).join('\n');
+        choppedLines = actualChoppedLines;
+        
+        choppedMessage = `Chopped ${actualChoppedLines} line(s) from scratchpad "${scratchpad.title}" (${totalLines} → ${linesToKeep} lines)`;
+      }
 
       // Update the scratchpad using the new public method
       const updatedScratchpad = db.updateScratchpadContent(args.id, newContent);
@@ -682,8 +714,8 @@ export const chopScratchpadTool = (
           updated_at: formatTimestamp(updatedScratchpad.updated_at),
           size_bytes: updatedScratchpad.size_bytes,
         },
-        message: `Chopped ${actualChoppedLines} line(s) from scratchpad "${updatedScratchpad.title}" (${totalLines} → ${linesToKeep} lines, ${updatedScratchpad.size_bytes} bytes)`,
-        chopped_lines: actualChoppedLines,
+        message: `${choppedMessage} (${updatedScratchpad.size_bytes} bytes)`,
+        chopped_lines: choppedLines,
       };
     } catch (error) {
       throw new Error(

@@ -38,6 +38,17 @@ await mcp.callTool('update-scratchpad', {
   content: 'New discovery about transformer architecture...',
 });
 
+// Block-based operations (NEW: semantic content handling)
+const lastBlocks = await mcp.callTool('tail-scratchpad', {
+  id: scratchpad.id,
+  tail_size: { blocks: 2 }, // Get last 2 semantic blocks
+});
+
+await mcp.callTool('chop-scratchpad', {
+  id: scratchpad.id,
+  blocks: 1, // Remove last block precisely
+});
+
 // Chinese search example (intelligent tokenization)
 const results = await mcp.callTool('search-scratchpads', {
   query: '自然語言處理模型架構',
@@ -126,8 +137,8 @@ export OPENAI_API_KEY="your-openai-api-key"
 - `create-scratchpad` - Create a scratchpad within a workflow
 - `get-scratchpad` - Retrieve a scratchpad by ID
 - `append-scratchpad` - Append content to an existing scratchpad
-- `tail-scratchpad` - Tail content, or set `full_content=true` to get full content
-- `chop-scratchpad` - Remove lines from the end of a scratchpad (reverse of tail)
+- `tail-scratchpad` - Tail content with line/char/block modes, or set `full_content=true` to get full content
+- `chop-scratchpad` - Remove lines or blocks from the end of a scratchpad (supports semantic block removal)
 - `update-scratchpad` - Multi-mode editing tool with replace/insert/replace-lines/append-section modes
 - `list-scratchpads` - List scratchpads in a workflow
 - `search-scratchpads` - Full-text search with context-aware snippets (grep-like functionality, intelligent Chinese tokenization)
@@ -432,14 +443,15 @@ Append content to an existing scratchpad.
 
 #### `tail-scratchpad`
 
-Tail content, or return full content with `full_content=true`.
+Tail content, or return full content with `full_content=true`. Supports block-based extraction for semantic content handling.
 
 ```typescript
 {
   id: string;             // required
-  tail_size?: {           // choose either lines or chars
-    lines?: number;       // >= 1
-    chars?: number;       // >= 1
+  tail_size?: {           // choose either lines, chars, or blocks
+    lines?: number;       // >= 1 - extract by line count
+    chars?: number;       // >= 1 - extract by character count  
+    blocks?: number;      // >= 1 - extract by block count (semantic units)
   };
   include_content?: boolean; // default: true
   full_content?: boolean;    // overrides tail_size
@@ -448,16 +460,21 @@ Tail content, or return full content with `full_content=true`.
 
 Parameter priority: `full_content` > `tail_size` > default (50 lines)
 
+**Block-based extraction**: Uses the new append splitter format (`---\n<!--- block start --->\n`) to extract semantic content blocks rather than arbitrary lines. Perfect for retrieving complete logical sections.
+
 #### `chop-scratchpad`
 
-Remove lines from the end of a scratchpad. Does not return content after completion.
+Remove content from the end of a scratchpad. Supports both line-based and block-based removal. Does not return content after completion.
 
 ```typescript
 {
   id: string;         // required - scratchpad ID
   lines?: number;     // optional - number of lines to remove from end (default: 1)
+  blocks?: number;    // optional - number of blocks to remove from end (alternative to lines)
 }
 ```
+
+**Block-based removal**: Use `blocks` parameter to remove complete semantic blocks rather than arbitrary lines. Uses the append splitter format to identify block boundaries. Only one of `lines` or `blocks` should be specified.
 
 #### `update-scratchpad`
 
@@ -669,7 +686,26 @@ const recentContent = await callTool('tail-scratchpad', {
   tail_size: { lines: 10 },
 });
 
-// 12) Full content but metadata only
+// 12) Block-based tail extraction (NEW: semantic content handling)
+const lastTwoBlocks = await callTool('tail-scratchpad', {
+  id: scratchpad.id,
+  tail_size: { blocks: 2 },
+  include_content: true,
+});
+
+// 13) Block-based content removal (NEW: semantic content management)
+await callTool('chop-scratchpad', {
+  id: scratchpad.id,
+  blocks: 1, // Remove the last block instead of arbitrary lines
+});
+
+// 14) Verify block operations with precise extraction
+const remainingBlocks = await callTool('tail-scratchpad', {
+  id: scratchpad.id,
+  tail_size: { blocks: 3 }, // Get last 3 blocks for verification
+});
+
+// 15) Full content but metadata only
 const controlledContent = await callTool('tail-scratchpad', {
   id: scratchpad.id,
   full_content: true,
@@ -802,6 +838,8 @@ Benefits: stable working directory, proper extension/dictionary loading, DB path
 - Server: MCP over stdio
 - Tools: 13 core tools with comprehensive parameter validation
 - Database: SQLite with FTS5 full-text search, WAL mode, optional Chinese tokenization
+- Content Management: Block-based operations with semantic content handling via BlockParser utility
+- Append System: Enhanced splitter format (`---\n<!--- block start --->\n`) for clear content separation
 - Extension layer: optional Chinese word segmentation with cross-directory support
 
 ### Performance Characteristics

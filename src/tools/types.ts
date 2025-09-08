@@ -364,8 +364,8 @@ export interface UpdateWorkflowStatusResult {
 // New tail-scratchpad tool types - SIMPLIFIED DESIGN
 export interface TailScratchpadArgs {
   id: string;
-  /** Tail size specification - choose either lines OR chars, not both */
-  tail_size?: { lines: number } | { chars: number };
+  /** Tail size specification - choose either lines OR chars OR blocks, not multiple */
+  tail_size?: { lines: number } | { chars: number } | { blocks: number };
   /** Whether to include content in response (default: true) */
   include_content?: boolean;
   /** Whether to return full content instead of tail (overrides tail_size) */
@@ -418,6 +418,7 @@ export interface ExtractWorkflowInfoResult {
 export interface ChopScratchpadArgs {
   id: string;
   lines?: number; // Number of lines to remove from the end (default: 1)
+  blocks?: number; // Number of blocks to remove from the end
 }
 
 export interface ChopScratchpadResult {
