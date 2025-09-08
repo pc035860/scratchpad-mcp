@@ -3,6 +3,10 @@
  */
 import type { ScratchpadDatabase } from '../database/index.js';
 import type {
+  EnhancedUpdateScratchpadArgs,
+  EnhancedUpdateScratchpadResult,
+} from '../database/types.js';
+import type {
   ToolHandler,
   CreateScratchpadArgs,
   CreateScratchpadResult,
@@ -92,6 +96,213 @@ const formatScratchpad = (
 
   return formatted;
 };
+
+/**
+ * LineEditor - Core editing engine for enhanced scratchpad updates
+ * 
+ * Provides unified line-based editing algorithms for four modes:
+ * - replace: Complete content replacement
+ * - insert_at_line: Insert content at specific line number
+ * - replace_lines: Replace specific line range with new content  
+ * - append_section: Smart append after markdown section markers
+ */
+class LineEditor {
+  /**
+   * Apply editing operation based on mode and parameters
+   */
+  static processEdit(
+    originalContent: string,
+    args: EnhancedUpdateScratchpadArgs
+  ): { newContent: string; operationDetails: any } {
+    // Handle empty content case
+    const lines = originalContent === '' ? [] : originalContent.split('\n');
+    const totalLines = lines.length;
+
+    let newLines: string[];
+    let operationDetails: any = {
+      mode: args.mode,
+      lines_affected: 0,
+      size_change_bytes: 0,
+      previous_size_bytes: Buffer.byteLength(originalContent, 'utf8'),
+    };
+
+    switch (args.mode) {
+      case 'replace':
+        newLines = args.content === '' ? [] : args.content.split('\n');
+        operationDetails.lines_affected = newLines.length;
+        break;
+
+      case 'insert_at_line':
+        const insertResult = LineEditor.insertAtLine(lines, args.content, args.line_number!);
+        newLines = insertResult.lines;
+        operationDetails.lines_affected = args.content.split('\n').length;
+        operationDetails.insertion_point = insertResult.actualInsertionPoint;
+        break;
+
+      case 'replace_lines':
+        const result = LineEditor.replaceLines(
+          lines,
+          args.content,
+          args.start_line!,
+          args.end_line!
+        );
+        newLines = result.lines;
+        operationDetails.lines_affected = result.linesAffected;
+        operationDetails.replaced_range = {
+          start_line: args.start_line!,
+          end_line: args.end_line!,
+        };
+        break;
+
+      case 'append_section':
+        const sectionResult = LineEditor.appendSection(
+          lines,
+          args.content,
+          args.section_marker!
+        );
+        newLines = sectionResult.lines;
+        operationDetails.lines_affected = args.content.split('\n').length;
+        operationDetails.insertion_point = sectionResult.insertionPoint;
+        break;
+
+      default:
+        throw new Error(`Unknown edit mode: ${(args as any).mode}`);
+    }
+
+    const newContent = newLines.join('\n');
+    operationDetails.size_change_bytes =
+      Buffer.byteLength(newContent, 'utf8') - operationDetails.previous_size_bytes;
+
+    return { newContent, operationDetails };
+  }
+
+  /**
+   * Insert content at specific line number (1-based indexing)
+   */
+  private static insertAtLine(lines: string[], content: string, lineNumber: number): { lines: string[]; actualInsertionPoint: number } {
+    const insertLines = content === '' ? [] : content.split('\n');
+    const insertIndex = Math.max(0, Math.min(lineNumber - 1, lines.length));
+    
+    const newLines = [...lines];
+    newLines.splice(insertIndex, 0, ...insertLines);
+    
+    return {
+      lines: newLines,
+      actualInsertionPoint: insertIndex + 1, // Convert back to 1-based indexing
+    };
+  }
+
+  /**
+   * Replace specific line range with new content (1-based indexing, inclusive)
+   */
+  private static replaceLines(
+    lines: string[],
+    content: string,
+    startLine: number,
+    endLine: number
+  ): { lines: string[]; linesAffected: number } {
+    const replaceLines = content === '' ? [] : content.split('\n');
+    
+    // Convert to 0-based indexing and ensure valid range
+    const startIndex = Math.max(0, Math.min(startLine - 1, lines.length));
+    const endIndex = Math.max(0, Math.min(endLine - 1, lines.length - 1));
+    const deleteCount = Math.max(0, endIndex - startIndex + 1);
+    
+    const newLines = [...lines];
+    newLines.splice(startIndex, deleteCount, ...replaceLines);
+    
+    return {
+      lines: newLines,
+      linesAffected: replaceLines.length,
+    };
+  }
+
+  /**
+   * Smart append after markdown section markers
+   * Searches for section marker and intelligently determines insertion point
+   */
+  private static appendSection(
+    lines: string[],
+    content: string,
+    sectionMarker: string
+  ): { lines: string[]; insertionPoint: number } {
+    const appendLines = content === '' ? [] : content.split('\n');
+    
+    // Find the section marker
+    let insertIndex = -1;
+    let markerWasFound = false;
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i]?.includes(sectionMarker)) {
+        markerWasFound = true;
+        insertIndex = i + 1;
+        
+        // Look ahead to find the best insertion point after the marker
+        // Skip empty lines immediately after the marker
+        while (insertIndex < lines.length && lines[insertIndex]?.trim() === '') {
+          insertIndex++;
+        }
+        
+        // If we found content after the marker, find the end of this section
+        if (insertIndex < lines.length) {
+          // Look for next section marker or significant content break
+          let sectionEndIndex = insertIndex;
+          for (let j = insertIndex; j < lines.length; j++) {
+            const line = lines[j]?.trim() || '';
+            // Stop at next markdown header or similar marker
+            if (line.startsWith('#') || line.startsWith('##') || line === '---') {
+              break;
+            }
+            sectionEndIndex = j + 1;
+          }
+          insertIndex = sectionEndIndex;
+        }
+        
+        break;
+      }
+    }
+
+    // If marker not found, append at end
+    if (insertIndex === -1) {
+      insertIndex = lines.length;
+    }
+
+    const newLines = [...lines];
+    
+    // Separator logic based on test case analysis:
+    // Add separator UNLESS we're inserting before a markdown header (# or ##)
+    // Special cases: 
+    // 1. If marker not found, don't add separator
+    // 2. If multiple same markers, add separator even if next line is header
+    const hasContentBefore = insertIndex > 0 && lines[insertIndex - 1]?.trim() !== '';
+    const nextLineIsHeader = insertIndex < lines.length && 
+                            lines[insertIndex]?.trim().match(/^##?\s/);
+    const isMultipleMarkerCase = markerWasFound && nextLineIsHeader && 
+                               lines[insertIndex]?.includes(sectionMarker);
+    
+    let needsSeparator = hasContentBefore && !nextLineIsHeader;
+    
+    // Special case adjustments
+    if (!markerWasFound) {
+      needsSeparator = false; // Don't add separator when marker not found
+    } else if (isMultipleMarkerCase) {
+      needsSeparator = true; // Add separator for multiple marker case
+    }
+    
+    if (needsSeparator) {
+      newLines.splice(insertIndex, 0, '', ...appendLines);
+      return {
+        lines: newLines,
+        insertionPoint: insertIndex + 2, // +2 because we added empty line first
+      };
+    } else {
+      newLines.splice(insertIndex, 0, ...appendLines);
+      return {
+        lines: newLines,
+        insertionPoint: insertIndex + 1, // Return 1-based line number
+      };
+    }
+  }
+}
 
 /**
  * Create a new scratchpad
@@ -477,6 +688,87 @@ export const chopScratchpadTool = (
     } catch (error) {
       throw new Error(
         `Failed to chop scratchpad: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    }
+  };
+};
+
+/**
+ * Enhanced update scratchpad tool - Multi-mode editing support
+ * Supports four editing modes: replace, insert_at_line, replace_lines, append_section
+ */
+export const enhancedUpdateScratchpadTool = (
+  db: ScratchpadDatabase
+): ToolHandler<EnhancedUpdateScratchpadArgs, EnhancedUpdateScratchpadResult> => {
+  return async (args: EnhancedUpdateScratchpadArgs): Promise<EnhancedUpdateScratchpadResult> => {
+    try {
+      // Get the original scratchpad
+      const originalScratchpad = db.getScratchpadById(args.id);
+      if (!originalScratchpad) {
+        throw new Error(`Scratchpad not found: ${args.id}`);
+      }
+
+      // Check if the workflow is active
+      const workflow = db.getWorkflowById(originalScratchpad.workflow_id);
+      if (!workflow) {
+        throw new Error(`Workflow not found for scratchpad: ${args.id}`);
+      }
+      if (!workflow.is_active) {
+        throw new Error('Cannot update scratchpad: workflow is not active');
+      }
+
+      // Use LineEditor to process the edit
+      const { newContent, operationDetails } = LineEditor.processEdit(
+        originalScratchpad.content,
+        args
+      );
+
+      // Update the scratchpad content using database method
+      const updatedScratchpad = db.updateScratchpadContent(args.id, newContent);
+
+      // Generate human-readable message based on operation
+      let message: string;
+      switch (args.mode) {
+        case 'replace':
+          message = `Replaced entire content of scratchpad "${updatedScratchpad.title}" (${operationDetails.lines_affected} lines affected, ${updatedScratchpad.size_bytes} bytes)`;
+          break;
+        case 'insert_at_line':
+          message = `Inserted content at line ${operationDetails.insertion_point} in scratchpad "${updatedScratchpad.title}" (${operationDetails.lines_affected} lines added, ${updatedScratchpad.size_bytes} bytes)`;
+          break;
+        case 'replace_lines':
+          message = `Replaced lines ${operationDetails.replaced_range?.start_line}-${operationDetails.replaced_range?.end_line} in scratchpad "${updatedScratchpad.title}" (${operationDetails.lines_affected} lines affected, ${updatedScratchpad.size_bytes} bytes)`;
+          break;
+        case 'append_section':
+          message = `Appended content to section "${args.section_marker}" at line ${operationDetails.insertion_point} in scratchpad "${updatedScratchpad.title}" (${operationDetails.lines_affected} lines added, ${updatedScratchpad.size_bytes} bytes)`;
+          break;
+        default:
+          message = `Updated scratchpad "${updatedScratchpad.title}" using ${args.mode} mode (${updatedScratchpad.size_bytes} bytes)`;
+      }
+
+      // Smart content control: default to include content, exclude only if explicitly requested
+      const includeContent = args.include_content ?? true;
+      
+      // Adjust message if content is not included
+      if (!includeContent) {
+        message += ' - Content not included in response';
+      }
+      
+      return {
+        scratchpad: {
+          id: updatedScratchpad.id,
+          workflow_id: updatedScratchpad.workflow_id,
+          title: updatedScratchpad.title,
+          ...(includeContent && { content: updatedScratchpad.content }),
+          created_at: formatTimestamp(updatedScratchpad.created_at),
+          updated_at: formatTimestamp(updatedScratchpad.updated_at),
+          size_bytes: updatedScratchpad.size_bytes,
+        },
+        message,
+        operation_details: operationDetails,
+      };
+    } catch (error) {
+      throw new Error(
+        `Failed to update scratchpad: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
     }
   };

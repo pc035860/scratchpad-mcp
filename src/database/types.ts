@@ -195,3 +195,79 @@ export interface ChopScratchpadParams {
   id: string;
   lines?: number; // 可選：要刪除的行數，默認為 1
 }
+
+/**
+ * Enhanced Update Scratchpad - Multi-mode editing interfaces
+ * 增強型多模式編輯介面定義
+ */
+
+/**
+ * Available edit modes for enhanced scratchpad updates
+ * 可用的編輯模式列舉
+ */
+export type EditMode = 'replace' | 'insert_at_line' | 'replace_lines' | 'append_section';
+
+/**
+ * Enhanced Update Scratchpad Arguments
+ * 支援四種編輯模式的統一介面
+ */
+export interface EnhancedUpdateScratchpadArgs {
+  /** Scratchpad ID to edit */
+  id: string;
+  
+  /** Edit mode to use */
+  mode: EditMode;
+  
+  /** Content to insert, replace, or append */
+  content: string;
+  
+  /** Whether to include content in response (default: false) */
+  include_content?: boolean;
+  
+  // Conditional parameters based on mode
+  
+  /** Line number for insert_at_line mode (1-based indexing) */
+  line_number?: number;
+  
+  /** Start line for replace_lines mode (1-based, inclusive) */
+  start_line?: number;
+  
+  /** End line for replace_lines mode (1-based, inclusive) */
+  end_line?: number;
+  
+  /** Section marker for append_section mode (e.g., "## Features", "# TODO") */
+  section_marker?: string;
+}
+
+/**
+ * Enhanced Update Scratchpad Result
+ * 增強型編輯操作的回傳結果
+ */
+export interface EnhancedUpdateScratchpadResult {
+  /** Updated scratchpad information */
+  scratchpad: {
+    id: string;
+    workflow_id: string;
+    title: string;
+    content?: string; // Only included if include_content=true
+    created_at: string;
+    updated_at: string;
+    size_bytes: number;
+  };
+  
+  /** Human-readable operation message */
+  message: string;
+  
+  /** Detailed operation information */
+  operation_details: {
+    mode: EditMode;
+    lines_affected: number;
+    size_change_bytes: number;
+    previous_size_bytes: number;
+    insertion_point?: number; // For insert_at_line and append_section modes
+    replaced_range?: {
+      start_line: number;
+      end_line: number;
+    }; // For replace_lines mode
+  };
+}

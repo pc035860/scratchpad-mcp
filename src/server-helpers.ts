@@ -17,6 +17,11 @@ import type {
   ExtractWorkflowInfoArgs,
 } from './tools/index.js';
 
+import type { 
+  EnhancedUpdateScratchpadArgs, 
+  EditMode 
+} from './database/types.js';
+
 /**
  * Type guard and validator functions for MCP tool arguments
  */
@@ -643,4 +648,135 @@ export function validateExtractWorkflowInfoArgs(args: unknown): ExtractWorkflowI
   }
 
   return result;
+}
+
+/**
+ * Enhanced Update Scratchpad Arguments Validator
+ * 增強型編輯工具參數驗證器，支援四種模式的條件驗證
+ */
+export function validateEnhancedUpdateScratchpadArgs(args: unknown): EnhancedUpdateScratchpadArgs {
+  if (!args || typeof args !== 'object') {
+    throw new Error('Invalid arguments: expected object');
+  }
+
+  const obj = args as Record<string, unknown>;
+
+  // Basic parameter validation
+  if (typeof obj['id'] !== 'string' || obj['id'].trim().length === 0) {
+    throw new Error('Invalid arguments: id is required and must be a non-empty string');
+  }
+
+  if (typeof obj['mode'] !== 'string') {
+    throw new Error('Invalid arguments: mode is required and must be a string');
+  }
+
+  // Validate edit mode
+  const validModes: EditMode[] = ['replace', 'insert_at_line', 'replace_lines', 'append_section'];
+  if (!validModes.includes(obj['mode'] as EditMode)) {
+    throw new Error(
+      `Invalid arguments: mode must be one of: ${validModes.join(', ')}. Got: ${obj['mode']}`
+    );
+  }
+
+  const mode = obj['mode'] as EditMode;
+
+  if (typeof obj['content'] !== 'string') {
+    throw new Error('Invalid arguments: content is required and must be a string');
+  }
+
+  // Optional include_content validation
+  if (obj['include_content'] !== undefined && typeof obj['include_content'] !== 'boolean') {
+    throw new Error('Invalid arguments: include_content must be a boolean if provided');
+  }
+
+  const result: EnhancedUpdateScratchpadArgs = {
+    id: obj['id'].trim(),
+    mode,
+    content: obj['content'],
+    ...(obj['include_content'] !== undefined && { include_content: obj['include_content'] as boolean }),
+  };
+
+  // Mode-specific conditional parameter validation
+  switch (mode) {
+    case 'replace':
+      // No additional parameters required for replace mode
+      validateNoExtraParameters(obj, ['id', 'mode', 'content', 'include_content'], 'replace');
+      break;
+
+    case 'insert_at_line':
+      if (typeof obj['line_number'] !== 'number' || !Number.isInteger(obj['line_number'])) {
+        throw new Error('Invalid arguments: line_number is required for insert_at_line mode and must be an integer');
+      }
+      if (obj['line_number'] < 1) {
+        throw new Error('Invalid arguments: line_number must be >= 1 (1-based indexing)');
+      }
+      result.line_number = obj['line_number'];
+      validateNoExtraParameters(
+        obj, 
+        ['id', 'mode', 'content', 'include_content', 'line_number'], 
+        'insert_at_line'
+      );
+      break;
+
+    case 'replace_lines':
+      if (typeof obj['start_line'] !== 'number' || !Number.isInteger(obj['start_line'])) {
+        throw new Error('Invalid arguments: start_line is required for replace_lines mode and must be an integer');
+      }
+      if (typeof obj['end_line'] !== 'number' || !Number.isInteger(obj['end_line'])) {
+        throw new Error('Invalid arguments: end_line is required for replace_lines mode and must be an integer');
+      }
+      if (obj['start_line'] < 1) {
+        throw new Error('Invalid arguments: start_line must be >= 1 (1-based indexing)');
+      }
+      if (obj['end_line'] < 1) {
+        throw new Error('Invalid arguments: end_line must be >= 1 (1-based indexing)');
+      }
+      if (obj['start_line'] > obj['end_line']) {
+        throw new Error('Invalid arguments: start_line must be <= end_line');
+      }
+      result.start_line = obj['start_line'];
+      result.end_line = obj['end_line'];
+      validateNoExtraParameters(
+        obj, 
+        ['id', 'mode', 'content', 'include_content', 'start_line', 'end_line'], 
+        'replace_lines'
+      );
+      break;
+
+    case 'append_section':
+      if (typeof obj['section_marker'] !== 'string' || obj['section_marker'].trim().length === 0) {
+        throw new Error('Invalid arguments: section_marker is required for append_section mode and must be a non-empty string');
+      }
+      result.section_marker = obj['section_marker'].trim();
+      validateNoExtraParameters(
+        obj, 
+        ['id', 'mode', 'content', 'include_content', 'section_marker'], 
+        'append_section'
+      );
+      break;
+
+    default:
+      // This should never happen due to mode validation above, but TypeScript requires it
+      throw new Error(`Internal error: unhandled edit mode: ${mode}`);
+  }
+
+  return result;
+}
+
+/**
+ * Helper function to validate that no unexpected parameters are provided
+ * 輔助函數：驗證沒有提供未預期的參數
+ */
+function validateNoExtraParameters(
+  obj: Record<string, unknown>,
+  allowedParams: string[],
+  mode: string
+): void {
+  const extraParams = Object.keys(obj).filter(key => !allowedParams.includes(key));
+  if (extraParams.length > 0) {
+    throw new Error(
+      `Invalid arguments for ${mode} mode: unexpected parameters: ${extraParams.join(', ')}. ` +
+      `Allowed parameters: ${allowedParams.join(', ')}`
+    );
+  }
 }
