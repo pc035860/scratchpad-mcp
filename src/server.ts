@@ -15,6 +15,7 @@ import {
   appendScratchpadTool,
   tailScratchpadTool,
   chopScratchpadTool,
+  enhancedUpdateScratchpadTool,
   listScratchpadsTool,
   searchScratchpadsTool,
   extractWorkflowInfoTool,
@@ -26,6 +27,7 @@ import {
   validateAppendScratchpadArgs,
   validateTailScratchpadArgs,
   validateChopScratchpadArgs,
+  validateEnhancedUpdateScratchpadArgs,
   validateListScratchpadsArgs,
   validateSearchScratchpadsArgs,
   validateUpdateWorkflowStatusArgs,
@@ -78,6 +80,7 @@ class ScratchpadMCPServer {
     const appendScratchpad = appendScratchpadTool(this.db);
     const tailScratchpad = tailScratchpadTool(this.db);
     const chopScratchpad = chopScratchpadTool(this.db);
+    const enhancedUpdateScratchpad = enhancedUpdateScratchpadTool(this.db);
     const listScratchpads = listScratchpadsTool(this.db);
 
     // Search tools
@@ -143,6 +146,12 @@ class ScratchpadMCPServer {
           case 'chop-scratchpad': {
             const validatedArgs = validateChopScratchpadArgs(args);
             const result = await chopScratchpad(validatedArgs);
+            return createToolResponse(result);
+          }
+
+          case 'update-scratchpad': {
+            const validatedArgs = validateEnhancedUpdateScratchpadArgs(args);
+            const result = await enhancedUpdateScratchpad(validatedArgs);
             return createToolResponse(result);
           }
 
@@ -421,6 +430,52 @@ class ScratchpadMCPServer {
                 },
               },
               required: ['id'],
+            },
+          },
+          {
+            name: 'update-scratchpad',
+            description: 'Enhanced multi-mode scratchpad editing tool. Supports four editing modes: replace (complete replacement), insert_at_line (insert at specific line), replace_lines (replace line range), append_section (smart append after markdown section marker). Provides detailed operation feedback.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                id: {
+                  type: 'string',
+                  description: 'ID of the scratchpad to edit',
+                },
+                mode: {
+                  type: 'string',
+                  enum: ['replace', 'insert_at_line', 'replace_lines', 'append_section'],
+                  description: 'Editing mode to use',
+                },
+                content: {
+                  type: 'string',
+                  description: 'Content to insert, replace, or append',
+                },
+                include_content: {
+                  type: 'boolean',
+                  description: 'Whether to include content in response (default: false)',
+                },
+                line_number: {
+                  type: 'number',
+                  description: 'Line number for insert_at_line mode (1-based indexing)',
+                  minimum: 1,
+                },
+                start_line: {
+                  type: 'number',
+                  description: 'Start line for replace_lines mode (1-based, inclusive)',
+                  minimum: 1,
+                },
+                end_line: {
+                  type: 'number',
+                  description: 'End line for replace_lines mode (1-based, inclusive)',
+                  minimum: 1,
+                },
+                section_marker: {
+                  type: 'string',
+                  description: 'Section marker for append_section mode (e.g., "## Features", "# TODO")',
+                },
+              },
+              required: ['id', 'mode', 'content'],
             },
           },
           {
