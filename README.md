@@ -24,10 +24,18 @@ const workflow = await mcp.callTool('create-workflow', {
   description: 'Collaborative research notes and findings',
 });
 
-await mcp.callTool('create-scratchpad', {
+const scratchpad = await mcp.callTool('create-scratchpad', {
   workflow_id: workflow.id,
   title: 'Model Architecture Notes',
   content: 'Initial transformer research findings...',
+});
+
+// Multi-mode editing example
+await mcp.callTool('update-scratchpad', {
+  id: scratchpad.id,
+  mode: 'append_section',
+  section_marker: '## Research Findings',
+  content: 'New discovery about transformer architecture...',
 });
 
 // Chinese search example (intelligent tokenization)
@@ -120,6 +128,7 @@ export OPENAI_API_KEY="your-openai-api-key"
 - `append-scratchpad` - Append content to an existing scratchpad
 - `tail-scratchpad` - Tail content, or set `full_content=true` to get full content
 - `chop-scratchpad` - Remove lines from the end of a scratchpad (reverse of tail)
+- `update-scratchpad` - Multi-mode editing tool with replace/insert/replace-lines/append-section modes
 - `list-scratchpads` - List scratchpads in a workflow
 - `search-scratchpads` - Full-text search with context-aware snippets (grep-like functionality, intelligent Chinese tokenization)
 - `extract-workflow-info` - Extract specific information from workflows using OpenAI models
@@ -450,6 +459,38 @@ Remove lines from the end of a scratchpad. Does not return content after complet
 }
 ```
 
+#### `update-scratchpad`
+
+Multi-mode scratchpad editing tool with four precise editing modes.
+
+```typescript
+{
+  id: string;                 // required - scratchpad ID
+  mode: string;               // required - editing mode: 'replace' | 'insert_at_line' | 'replace_lines' | 'append_section'
+  content: string;            // required - content to insert, replace, or append
+  include_content?: boolean;  // optional - return content in response (default: false)
+  
+  // Mode-specific parameters:
+  line_number?: number;       // required for 'insert_at_line' - 1-based line number
+  start_line?: number;        // required for 'replace_lines' - 1-based start line (inclusive)
+  end_line?: number;          // required for 'replace_lines' - 1-based end line (inclusive)
+  section_marker?: string;    // required for 'append_section' - markdown section marker (e.g., "## Features")
+}
+```
+
+**Editing Modes:**
+
+- **`replace`**: Complete content replacement (no additional parameters)
+- **`insert_at_line`**: Insert at specific line number (requires `line_number`)
+- **`replace_lines`**: Replace line range (requires `start_line` and `end_line`) 
+- **`append_section`**: Smart append after markdown section marker (requires `section_marker`)
+
+**Response includes detailed operation feedback:**
+- Lines affected count
+- Size change in bytes  
+- Insertion point (for insert/append modes)
+- Replaced range (for replace_lines mode)
+
 #### `list-scratchpads`
 
 List scratchpads with pagination and content control.
@@ -539,28 +580,61 @@ const scratchpad = await callTool('create-scratchpad', {
   content: '初始的自然語言處理模型架構研究，包含注意力機制的詳細分析...',
 });
 
-// 3) Intelligent Chinese search (auto-detected jieba)
+// 3) Multi-mode editing examples - demonstrate all four modes
+// Replace mode: Complete content replacement
+await callTool('update-scratchpad', {
+  id: scratchpad.id,
+  mode: 'replace',
+  content: '## 改進的 Transformer 架構研究\n\n完全重寫的研究筆記，包含最新發現...',
+});
+
+// Insert at line mode: Insert at specific position
+await callTool('update-scratchpad', {
+  id: scratchpad.id,
+  mode: 'insert_at_line',
+  line_number: 5,
+  content: '### 重要發現\n這是一個突破性的發現...',
+});
+
+// Replace lines mode: Replace specific line range
+await callTool('update-scratchpad', {
+  id: scratchpad.id,
+  mode: 'replace_lines',
+  start_line: 3,
+  end_line: 5,
+  content: '### 更新的方法論\n使用新的評估標準\n包含最新的實驗結果',
+});
+
+// Append section mode: Smart append after markdown marker
+await callTool('update-scratchpad', {
+  id: scratchpad.id,
+  mode: 'append_section',
+  section_marker: '## 改進的 Transformer 架構研究',
+  content: '\n### 最新實驗結果\n效能提升 15%，準確度達到 97.2%',
+});
+
+// 4) Intelligent Chinese search (auto-detected jieba)
 const results = await callTool('search-scratchpads', {
   query: '注意力機制 自然語言',
   workflow_id: workflow.id,
   limit: 10,
 });
 
-// 4) Force tokenizer mode (English scenario)
+// 5) Force tokenizer mode (English scenario)
 const manualResults = await callTool('search-scratchpads', {
   query: 'transformer attention',
   useJieba: false,
   limit: 10,
 });
 
-// 5) Context search - basic (like grep -C 3)
+// 6) Context search - basic (like grep -C 3)
 const contextResults = await callTool('search-scratchpads', {
   query: 'error',
   context_lines: 3,
   workflow_id: workflow.id,
 });
 
-// 6) Context search - asymmetric (like grep -B 2 -A 5)
+// 7) Context search - asymmetric (like grep -B 2 -A 5)
 const asymmetricResults = await callTool('search-scratchpads', {
   query: 'function',
   context_lines_before: 2,
@@ -568,7 +642,7 @@ const asymmetricResults = await callTool('search-scratchpads', {
   show_line_numbers: true,
 });
 
-// 7) Context search - with match limits and line numbers
+// 8) Context search - with match limits and line numbers
 const limitedResults = await callTool('search-scratchpads', {
   query: 'TODO',
   context_lines: 1,
@@ -577,25 +651,25 @@ const limitedResults = await callTool('search-scratchpads', {
   merge_context: false,
 });
 
-// 8) Append mixed-language content
+// 9) Append mixed-language content
 await callTool('append-scratchpad', {
   id: scratchpad.id,
   content: '\n\n## Additional Findings\n\nFrom paper XYZ: 新發現...',
 });
 
-// 9) Get full content via tail-scratchpad (alternative to get-scratchpad)
+// 10) Get full content via tail-scratchpad (alternative to get-scratchpad)
 const fullContent = await callTool('tail-scratchpad', {
   id: scratchpad.id,
   full_content: true,
 });
 
-// 10) Traditional tail mode
+// 11) Traditional tail mode
 const recentContent = await callTool('tail-scratchpad', {
   id: scratchpad.id,
   tail_size: { lines: 10 },
 });
 
-// 11) Full content but metadata only
+// 12) Full content but metadata only
 const controlledContent = await callTool('tail-scratchpad', {
   id: scratchpad.id,
   full_content: true,
@@ -652,11 +726,20 @@ scripts/
 └── install-chinese-support.sh   # Chinese tokenization setup
 
 tests/
-├── database.test.ts          # Database layer tests (9/9 passing)
-├── mcp-tools.test.ts         # MCP tools integration tests
-├── performance.test.ts       # Performance benchmarks
-├── mcp-project-scope.test.ts # Project scope isolation tests
-└── project-scope.test.ts     # Additional project scope tests
+├── database.test.ts                    # Database layer tests
+├── mcp-tools.test.ts                   # MCP tools integration tests
+├── performance.test.ts                 # Performance benchmarks
+├── update-scratchpad.test.ts           # Multi-mode editing tool tests
+├── line-editor.test.ts                 # Line editing algorithm tests  
+├── extraction.test.ts                  # AI extraction feature tests
+├── chop-scratchpad.test.ts             # Chop functionality tests
+├── mcp-project-scope.test.ts           # Project scope isolation tests
+├── project-scope.test.ts               # Additional project scope tests
+├── output-control.test.ts              # Output control optimization tests
+├── parameter-conflict.test.ts          # Parameter validation conflict tests
+├── ux-optimization.test.ts             # UX optimization tests
+└── critical-fixes-validation-v2.test.ts # Critical fixes validation
+# (13 test files total, 247 tests passing)
 
 extensions/
 ├── libsimple.dylib          # macOS simple tokenizer
@@ -670,7 +753,7 @@ extensions/
 ### Testing Strategy
 
 - Database layer: CRUD, FTS5, error and edge cases, Chinese tokenization
-- MCP tools integration: 12 tools parameter validation, scenarios, protocol compliance
+- MCP tools integration: 13 tools parameter validation, scenarios, protocol compliance
 - Performance: FTS5 <100ms, 1MB content, concurrent access, tokenization performance
 - Project scope: workflow isolation, cross-project restrictions
 
@@ -717,7 +800,7 @@ Benefits: stable working directory, proper extension/dictionary loading, DB path
 ### Architecture
 
 - Server: MCP over stdio
-- Tools: 12 core tools with comprehensive parameter validation
+- Tools: 13 core tools with comprehensive parameter validation
 - Database: SQLite with FTS5 full-text search, WAL mode, optional Chinese tokenization
 - Extension layer: optional Chinese word segmentation with cross-directory support
 
@@ -773,6 +856,8 @@ scratchpads_fts (FTS5 virtual table)
 ### Dependencies
 
 - Core: `@modelcontextprotocol/sdk`, `better-sqlite3`
+- AI Features: `openai`, `tiktoken`
+- Web Viewer: `marked`, `marked-highlight`, `prismjs`
 - Dev: `typescript`, `tsup`, `vitest`, `eslint`, `prettier`
 
 ---
