@@ -533,12 +533,14 @@ export function validateTailScratchpadArgs(args: unknown): TailScratchpadArgs {
 
     const tailSize = obj['tail_size'] as Record<string, unknown>;
 
-    // Validate that only one of lines or chars is specified
+    // Validate that only one of lines, chars, or blocks is specified
     const hasLines = tailSize['lines'] !== undefined;
     const hasChars = tailSize['chars'] !== undefined;
+    const hasBlocks = tailSize['blocks'] !== undefined;
 
-    if (hasLines && hasChars) {
-      throw new Error('Invalid arguments: tail_size must specify either lines OR chars, not both');
+    const specifiedCount = [hasLines, hasChars, hasBlocks].filter(Boolean).length;
+    if (specifiedCount > 1) {
+      throw new Error('Invalid arguments: tail_size must specify either lines OR chars OR blocks, not multiple');
     }
 
     if (hasLines) {
@@ -559,6 +561,15 @@ export function validateTailScratchpadArgs(args: unknown): TailScratchpadArgs {
         throw new Error('Invalid arguments: tail_size.chars must be a positive integer');
       }
       result.tail_size = { chars: tailSize['chars'] };
+    } else if (hasBlocks) {
+      if (
+        typeof tailSize['blocks'] !== 'number' ||
+        !Number.isInteger(tailSize['blocks']) ||
+        tailSize['blocks'] < 1
+      ) {
+        throw new Error('Invalid arguments: tail_size.blocks must be a positive integer');
+      }
+      result.tail_size = { blocks: tailSize['blocks'] };
     }
   }
 
@@ -602,6 +613,13 @@ export function validateChopScratchpadArgs(args: unknown): ChopScratchpadArgs {
       throw new Error('Invalid arguments: lines must be a positive integer');
     }
     result.lines = obj['lines'];
+  }
+
+  if (obj['blocks'] !== undefined) {
+    if (typeof obj['blocks'] !== 'number' || !Number.isInteger(obj['blocks']) || obj['blocks'] < 1) {
+      throw new Error('Invalid arguments: blocks must be a positive integer');
+    }
+    result.blocks = obj['blocks'];
   }
 
   return result;

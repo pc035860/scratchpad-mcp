@@ -371,7 +371,7 @@ class ScratchpadMCPServer {
                 },
                 tail_size: {
                   type: 'object',
-                  description: 'Tail size specification - choose either lines OR chars, not both',
+                  description: 'Tail size specification - choose either lines OR chars OR blocks, not multiple',
                   oneOf: [
                     {
                       type: 'object',
@@ -397,6 +397,18 @@ class ScratchpadMCPServer {
                       required: ['chars'],
                       additionalProperties: false,
                     },
+                    {
+                      type: 'object',
+                      properties: {
+                        blocks: {
+                          type: 'number',
+                          description: 'Number of blocks to return from the end',
+                          minimum: 1,
+                        },
+                      },
+                      required: ['blocks'],
+                      additionalProperties: false,
+                    },
                   ],
                 },
                 include_content: {
@@ -415,7 +427,7 @@ class ScratchpadMCPServer {
           {
             name: 'chop-scratchpad',
             description:
-              'Remove lines from the end of a scratchpad. Does not return content after completion.',
+              'Remove lines or blocks from the end of a scratchpad. Does not return content after completion.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -426,6 +438,11 @@ class ScratchpadMCPServer {
                 lines: {
                   type: 'number',
                   description: 'Number of lines to remove from the end (default: 1)',
+                  minimum: 1,
+                },
+                blocks: {
+                  type: 'number',
+                  description: 'Number of blocks to remove from the end',
                   minimum: 1,
                 },
               },

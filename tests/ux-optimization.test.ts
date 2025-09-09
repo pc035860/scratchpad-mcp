@@ -160,7 +160,7 @@ describe('UX Optimization Features Tests', () => {
       expect(result).not.toHaveProperty('error');
       expect(result.scratchpad.id).toBe(scratchpadId);
       expect(result.scratchpad.content).toBe(
-        'Initial content for Smart Append testing\n\n---\n\nBackward compatible append'
+        'Initial content for Smart Append testing\n\n---\n<!--- block start --->\n\nBackward compatible append'
       );
       expect(result.message).toContain('Appended');
       expect(result.appended_bytes).toBeGreaterThan(0);
@@ -195,7 +195,7 @@ describe('UX Optimization Features Tests', () => {
       expect(result).not.toHaveProperty('error');
       expect(result.scratchpad.id).toBe(scratchpadId); // Should resolve to the actual scratchpad
       expect(result.scratchpad.content).toBe(
-        'Initial content for Smart Append testing\n\n---\n\nSmart appended content using workflow ID'
+        'Initial content for Smart Append testing\n\n---\n<!--- block start --->\n\nSmart appended content using workflow ID'
       );
       expect(result.message).toContain('Smart Append Test Scratchpad');
       expect(result.appended_bytes).toBeGreaterThan(0);
