@@ -12,6 +12,7 @@ import {
   updateWorkflowStatusTool,
   createScratchpadTool,
   getScratchpadTool,
+  getScratchpadOutlineTool,
   appendScratchpadTool,
   tailScratchpadTool,
   chopScratchpadTool,
@@ -24,6 +25,7 @@ import {
   validateCreateWorkflowArgs,
   validateCreateScratchpadArgs,
   validateGetScratchpadArgs,
+  validateGetScratchpadOutlineArgs,
   validateAppendScratchpadArgs,
   validateTailScratchpadArgs,
   validateChopScratchpadArgs,
@@ -77,6 +79,7 @@ class ScratchpadMCPServer {
     // Scratchpad CRUD tools
     const createScratchpad = createScratchpadTool(this.db);
     const getScratchpad = getScratchpadTool(this.db);
+    const getScratchpadOutline = getScratchpadOutlineTool(this.db);
     const appendScratchpad = appendScratchpadTool(this.db);
     const tailScratchpad = tailScratchpadTool(this.db);
     const chopScratchpad = chopScratchpadTool(this.db);
@@ -128,6 +131,12 @@ class ScratchpadMCPServer {
           case 'get-scratchpad': {
             const validatedArgs = validateGetScratchpadArgs(args);
             const result = await getScratchpad(validatedArgs);
+            return createToolResponse(result);
+          }
+
+          case 'get-scratchpad-outline': {
+            const validatedArgs = validateGetScratchpadOutlineArgs(args);
+            const result = await getScratchpadOutline(validatedArgs);
             return createToolResponse(result);
           }
 
@@ -308,13 +317,56 @@ class ScratchpadMCPServer {
           {
             name: 'get-scratchpad',
             description:
-              'Retrieve a scratchpad by its ID (content truncated to 2000 chars by default). Use max_content_chars to adjust limit, preview_mode for quick overview, or include_content=false for metadata only.',
+              'Retrieve a scratchpad by its ID with optional range selection. Supports line_range (specific lines) and line_context (line + surrounding context or block). Content truncated to 2000 chars by default.',
             inputSchema: {
               type: 'object',
               properties: {
                 id: {
                   type: 'string',
                   description: 'ID of the scratchpad to retrieve',
+                },
+                line_range: {
+                  type: 'object',
+                  description: 'Specify line range to extract',
+                  properties: {
+                    start: {
+                      type: 'number',
+                      minimum: 1,
+                      description: 'Starting line number (1-based)',
+                    },
+                    end: {
+                      type: 'number',
+                      minimum: 1,
+                      description: 'Ending line number (optional, defaults to end of file)',
+                    },
+                  },
+                  required: ['start'],
+                },
+                line_context: {
+                  type: 'object',
+                  description: 'Specify line with surrounding context',
+                  properties: {
+                    line: {
+                      type: 'number',
+                      minimum: 1,
+                      description: 'Target line number (1-based)',
+                    },
+                    before: {
+                      type: 'number',
+                      minimum: 0,
+                      description: 'Lines before target line (default: 2)',
+                    },
+                    after: {
+                      type: 'number',
+                      minimum: 0,
+                      description: 'Lines after target line (default: 2)',
+                    },
+                    include_block: {
+                      type: 'boolean',
+                      description: 'Return entire block containing the target line (ignores before/after)',
+                    },
+                  },
+                  required: ['line'],
                 },
                 preview_mode: {
                   type: 'boolean',
@@ -331,6 +383,35 @@ class ScratchpadMCPServer {
                   type: 'boolean',
                   description:
                     'Whether to include content in response. false=metadata only (overrides other content options), true=include content.',
+                },
+              },
+              required: ['id'],
+            },
+          },
+          {
+            name: 'get-scratchpad-outline',
+            description:
+              'Parse and retrieve the markdown header structure of a scratchpad. Shows hierarchy with line numbers to help locate content sections.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                id: {
+                  type: 'string',
+                  description: 'ID of the scratchpad to analyze',
+                },
+                max_depth: {
+                  type: 'number',
+                  minimum: 1,
+                  maximum: 6,
+                  description: 'Maximum header depth to include (1-6, default: unlimited)',
+                },
+                include_line_numbers: {
+                  type: 'boolean',
+                  description: 'Whether to include line numbers in output (default: true)',
+                },
+                include_content_preview: {
+                  type: 'boolean',
+                  description: 'Whether to include content preview for each section (default: false)',
                 },
               },
               required: ['id'],

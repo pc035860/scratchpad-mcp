@@ -13,6 +13,7 @@ import {
   updateWorkflowStatusTool,
   createScratchpadTool,
   getScratchpadTool,
+  getScratchpadOutlineTool,
   appendScratchpadTool,
   tailScratchpadTool,
   listScratchpadsTool,
@@ -22,6 +23,7 @@ import {
   type UpdateWorkflowStatusArgs,
   type CreateScratchpadArgs,
   type GetScratchpadArgs,
+  type GetScratchpadOutlineArgs,
   type AppendScratchpadArgs,
   type TailScratchpadArgs,
   type ListScratchpadsArgs,
@@ -41,6 +43,7 @@ class MCPToolsTestHelper {
   private updateWorkflowStatus: ReturnType<typeof updateWorkflowStatusTool>;
   private createScratchpad: ReturnType<typeof createScratchpadTool>;
   private getScratchpad: ReturnType<typeof getScratchpadTool>;
+  private getScratchpadOutline: ReturnType<typeof getScratchpadOutlineTool>;
   private appendScratchpad: ReturnType<typeof appendScratchpadTool>;
   private tailScratchpad: ReturnType<typeof tailScratchpadTool>;
   private listScratchpads: ReturnType<typeof listScratchpadsTool>;
@@ -56,6 +59,7 @@ class MCPToolsTestHelper {
     this.updateWorkflowStatus = updateWorkflowStatusTool(this.db);
     this.createScratchpad = createScratchpadTool(this.db);
     this.getScratchpad = getScratchpadTool(this.db);
+    this.getScratchpadOutline = getScratchpadOutlineTool(this.db);
     this.appendScratchpad = appendScratchpadTool(this.db);
     this.tailScratchpad = tailScratchpadTool(this.db);
     this.listScratchpads = listScratchpadsTool(this.db);
@@ -106,6 +110,14 @@ class MCPToolsTestHelper {
   async callGetScratchpad(args: GetScratchpadArgs) {
     try {
       return await this.getScratchpad(args);
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  }
+
+  async callGetScratchpadOutline(args: GetScratchpadOutlineArgs) {
+    try {
+      return await this.getScratchpadOutline(args);
     } catch (error) {
       return { error: error instanceof Error ? error.message : 'Unknown error' };
     }
@@ -355,6 +367,222 @@ describe('MCP Tools Integration Tests', () => {
         expect(result).not.toHaveProperty('error');
         expect(result).toHaveProperty('scratchpad');
         expect(result.scratchpad).toBeNull();
+      });
+    });
+
+    describe('get-scratchpad-outline tool', () => {
+      let scratchpadId: string;
+
+      beforeEach(async () => {
+        const markdownContent = `# Main Title
+This is the introduction.
+
+## Section 1
+Some content for section 1.
+
+### Subsection 1.1  
+Detailed content here.
+
+## Section 2
+More content in section 2.
+
+#### Deep Section
+Very detailed content.`;
+
+        const createResult = await helper.callCreateScratchpad({
+          workflow_id: workflowId,
+          title: 'Test Scratchpad for Outline',
+          content: markdownContent,
+          include_content: true,
+        });
+        expect(createResult).not.toHaveProperty('error');
+        scratchpadId = createResult.scratchpad.id;
+      });
+
+      it('should parse markdown headers correctly', async () => {
+        const result = await helper.callGetScratchpadOutline({
+          id: scratchpadId,
+        });
+
+        expect(result).not.toHaveProperty('error');
+        expect(result).toHaveProperty('outline');
+        expect(result.outline.headers).toHaveLength(5);
+        
+        expect(result.outline.headers[0]).toMatchObject({
+          level: 1,
+          text: 'Main Title',
+          line: 1,
+        });
+        
+        expect(result.outline.headers[1]).toMatchObject({
+          level: 2,
+          text: 'Section 1',
+          line: 4,
+        });
+        
+        expect(result.outline.total_headers).toBe(5);
+        expect(result.outline.max_depth_found).toBe(4);
+      });
+
+      it('should respect max_depth parameter', async () => {
+        const result = await helper.callGetScratchpadOutline({
+          id: scratchpadId,
+          max_depth: 2,
+        });
+
+        expect(result).not.toHaveProperty('error');
+        expect(result.outline.headers).toHaveLength(3); // Only levels 1 and 2
+        expect(result.outline.headers.every(h => h.level <= 2)).toBe(true);
+      });
+
+      it('should include content preview when requested', async () => {
+        const result = await helper.callGetScratchpadOutline({
+          id: scratchpadId,
+          include_content_preview: true,
+        });
+
+        expect(result).not.toHaveProperty('error');
+        expect(result.outline.headers[0]).toHaveProperty('content_preview');
+        expect(result.outline.headers[1]).toHaveProperty('content_preview');
+        expect(result.outline.headers[0].content_preview).toContain('This is the introduction');
+      });
+
+      it('should handle empty content', async () => {
+        const emptyResult = await helper.callCreateScratchpad({
+          workflow_id: workflowId,
+          title: 'Empty Scratchpad',
+          content: '',
+        });
+        expect(emptyResult).not.toHaveProperty('error');
+
+        const result = await helper.callGetScratchpadOutline({
+          id: emptyResult.scratchpad.id,
+        });
+
+        expect(result).not.toHaveProperty('error');
+        expect(result.outline.headers).toHaveLength(0);
+        expect(result.outline.total_headers).toBe(0);
+        expect(result.outline.max_depth_found).toBe(0);
+      });
+
+      it('should handle non-existent scratchpad', async () => {
+        const result = await helper.callGetScratchpadOutline({
+          id: 'non-existent-id',
+        });
+
+        expect(result).toHaveProperty('error');
+        expect(result.error).toContain('Scratchpad not found');
+      });
+    });
+
+    describe('get-scratchpad with range selection', () => {
+      let scratchpadId: string;
+
+      beforeEach(async () => {
+        const multiLineContent = `Line 1: First line
+Line 2: Second line  
+Line 3: Third line
+Line 4: Fourth line
+Line 5: Fifth line
+Line 6: Sixth line
+Line 7: Seventh line
+Line 8: Eighth line
+Line 9: Ninth line
+Line 10: Tenth line`;
+
+        const createResult = await helper.callCreateScratchpad({
+          workflow_id: workflowId,
+          title: 'Test Scratchpad for Range',
+          content: multiLineContent,
+          include_content: true,
+        });
+        expect(createResult).not.toHaveProperty('error');
+        scratchpadId = createResult.scratchpad.id;
+      });
+
+      it('should extract line range correctly', async () => {
+        const result = await helper.callGetScratchpad({
+          id: scratchpadId,
+          line_range: { start: 3, end: 6 },
+        });
+
+        expect(result).not.toHaveProperty('error');
+        expect(result.scratchpad).not.toBeNull();
+        
+        const expectedContent = `Line 3: Third line
+Line 4: Fourth line
+Line 5: Fifth line
+Line 6: Sixth line`;
+        
+        expect(result.scratchpad.content).toBe(expectedContent);
+        expect(result.message).toContain('Lines 3-6');
+      });
+
+      it('should extract line context correctly', async () => {
+        const result = await helper.callGetScratchpad({
+          id: scratchpadId,
+          line_context: { line: 5, before: 1, after: 2 },
+        });
+
+        expect(result).not.toHaveProperty('error');
+        expect(result.scratchpad).not.toBeNull();
+        
+        const expectedContent = `Line 4: Fourth line
+Line 5: Fifth line
+Line 6: Sixth line
+Line 7: Seventh line`;
+        
+        expect(result.scratchpad.content).toBe(expectedContent);
+        expect(result.message).toContain('±1/2 around line 5');
+      });
+
+      it('should reject multiple range parameters', async () => {
+        const result = await helper.callGetScratchpad({
+          id: scratchpadId,
+          line_range: { start: 1, end: 3 },
+          line_context: { line: 2 },
+        } as any);
+
+        expect(result).toHaveProperty('error');
+        expect(result.error).toContain('Only one range parameter can be specified');
+      });
+
+      it('should validate line_range parameters', async () => {
+        // Test invalid start
+        const result1 = await helper.callGetScratchpad({
+          id: scratchpadId,
+          line_range: { start: 0 },
+        } as any);
+        expect(result1).toHaveProperty('error');
+
+        // Test end < start  
+        const result2 = await helper.callGetScratchpad({
+          id: scratchpadId,
+          line_range: { start: 5, end: 3 },
+        } as any);
+        expect(result2).toHaveProperty('error');
+      });
+
+      it('should validate line_context parameters', async () => {
+        // Test line out of bounds
+        const result = await helper.callGetScratchpad({
+          id: scratchpadId,
+          line_context: { line: 15 }, // > 10 lines
+        });
+        expect(result).toHaveProperty('error');
+        expect(result.error).toContain('line_context.line must be between 1 and 10');
+      });
+
+      it('should work with existing parameters (max_content_chars)', async () => {
+        const result = await helper.callGetScratchpad({
+          id: scratchpadId,
+          line_range: { start: 1, end: 5 },
+          max_content_chars: 50,
+        });
+
+        expect(result).not.toHaveProperty('error');
+        expect(result.scratchpad).not.toBeNull();
+        expect(result.scratchpad.content.length).toBeLessThanOrEqual(50);
       });
     });
 

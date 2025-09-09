@@ -188,6 +188,20 @@ export interface GetScratchpadArgs
     Pick<OutputControlOptions, 'max_content_chars' | 'include_content' | 'preview_mode'>
   > {
   id: string;
+  
+  /** 指定行號範圍 */
+  line_range?: { 
+    start: number;    // 起始行號 (1-based)
+    end?: number;     // 結束行號 (可選，預設到檔案末尾)
+  };
+  
+  /** 指定行號 + 上下文 */
+  line_context?: {
+    line: number;           // 目標行號 (1-based)
+    before?: number;        // 前面幾行 (預設 2)
+    after?: number;         // 後面幾行 (預設 2)
+    include_block?: boolean; // 直接返回該行所在的完整 block
+  };
 }
 
 export interface GetScratchpadResult {
@@ -432,4 +446,29 @@ export interface ChopScratchpadResult {
   };
   message: string;
   chopped_lines: number; // Actual number of lines removed
+}
+
+// Get Scratchpad Outline tool types
+export interface GetScratchpadOutlineArgs {
+  id: string;
+  max_depth?: number;            // 最大標題深度 (1-6, 預設無限制)
+  include_line_numbers?: boolean; // 是否包含行號 (預設 true)
+  include_content_preview?: boolean; // 是否包含內容預覽 (預設 false)
+}
+
+export interface GetScratchpadOutlineResult {
+  outline: {
+    id: string;
+    workflow_id: string;
+    title: string;
+    headers: {
+      level: number;        // 標題層級 (1-6)
+      text: string;         // 標題文字
+      line: number;         // 行號 (1-based)
+      content_preview?: string; // 內容預覽 (如果啟用)
+    }[];
+    total_headers: number;
+    max_depth_found: number;
+  };
+  message: string;
 }

@@ -6,6 +6,7 @@ import type {
   CreateWorkflowArgs,
   CreateScratchpadArgs,
   GetScratchpadArgs,
+  GetScratchpadOutlineArgs,
   AppendScratchpadArgs,
   TailScratchpadArgs,
   ChopScratchpadArgs,
@@ -87,6 +88,16 @@ export function validateCreateScratchpadArgs(args: unknown): CreateScratchpadArg
   return result;
 }
 
+export function validateRangeParameterConflict(args: Record<string, unknown>, useServerPrefix = true): void {
+  const rangeParams = [args['line_range'], args['line_context']].filter(param => param !== undefined);
+  if (rangeParams.length > 1) {
+    const message = useServerPrefix 
+      ? 'Invalid arguments: only one range parameter can be specified: line_range or line_context'
+      : 'Only one range parameter can be specified: line_range or line_context';
+    throw new Error(message);
+  }
+}
+
 export function validateGetScratchpadArgs(args: unknown): GetScratchpadArgs {
   if (!args || typeof args !== 'object') {
     throw new Error('Invalid arguments: expected object');
@@ -101,6 +112,74 @@ export function validateGetScratchpadArgs(args: unknown): GetScratchpadArgs {
   const result: GetScratchpadArgs = {
     id: obj['id'],
   };
+
+  // Validate range parameters (only one can be specified)
+  validateRangeParameterConflict(obj);
+
+  // Validate line_range parameter
+  if (obj['line_range'] !== undefined) {
+    if (!obj['line_range'] || typeof obj['line_range'] !== 'object') {
+      throw new Error('Invalid arguments: line_range must be an object');
+    }
+    const lineRange = obj['line_range'] as Record<string, unknown>;
+    
+    if (typeof lineRange['start'] !== 'number' || !Number.isInteger(lineRange['start']) || lineRange['start'] < 1) {
+      throw new Error('Invalid arguments: line_range.start must be a positive integer >= 1');
+    }
+    
+    const lineRangeResult: { start: number; end?: number } = { start: lineRange['start'] };
+    
+    if (lineRange['end'] !== undefined) {
+      if (typeof lineRange['end'] !== 'number' || !Number.isInteger(lineRange['end']) || lineRange['end'] < 1) {
+        throw new Error('Invalid arguments: line_range.end must be a positive integer >= 1');
+      }
+      if (lineRange['end'] < lineRange['start']) {
+        throw new Error('Invalid arguments: line_range.end must be >= line_range.start');
+      }
+      lineRangeResult.end = lineRange['end'];
+    }
+    
+    result.line_range = lineRangeResult;
+  }
+
+  // Validate line_context parameter
+  if (obj['line_context'] !== undefined) {
+    if (!obj['line_context'] || typeof obj['line_context'] !== 'object') {
+      throw new Error('Invalid arguments: line_context must be an object');
+    }
+    const lineContext = obj['line_context'] as Record<string, unknown>;
+    
+    if (typeof lineContext['line'] !== 'number' || !Number.isInteger(lineContext['line']) || lineContext['line'] < 1) {
+      throw new Error('Invalid arguments: line_context.line must be a positive integer >= 1');
+    }
+    
+    const lineContextResult: { line: number; before?: number; after?: number; include_block?: boolean } = { 
+      line: lineContext['line'] 
+    };
+    
+    if (lineContext['before'] !== undefined) {
+      if (typeof lineContext['before'] !== 'number' || !Number.isInteger(lineContext['before']) || lineContext['before'] < 0) {
+        throw new Error('Invalid arguments: line_context.before must be a non-negative integer');
+      }
+      lineContextResult.before = lineContext['before'];
+    }
+    
+    if (lineContext['after'] !== undefined) {
+      if (typeof lineContext['after'] !== 'number' || !Number.isInteger(lineContext['after']) || lineContext['after'] < 0) {
+        throw new Error('Invalid arguments: line_context.after must be a non-negative integer');
+      }
+      lineContextResult.after = lineContext['after'];
+    }
+    
+    if (lineContext['include_block'] !== undefined) {
+      if (typeof lineContext['include_block'] !== 'boolean') {
+        throw new Error('Invalid arguments: line_context.include_block must be a boolean');
+      }
+      lineContextResult.include_block = lineContext['include_block'];
+    }
+    
+    result.line_context = lineContextResult;
+  }
 
   if (obj['max_content_chars'] !== undefined) {
     if (
@@ -125,6 +204,45 @@ export function validateGetScratchpadArgs(args: unknown): GetScratchpadArgs {
       throw new Error('Invalid arguments: preview_mode must be a boolean');
     }
     result.preview_mode = obj['preview_mode'];
+  }
+
+  return result;
+}
+
+export function validateGetScratchpadOutlineArgs(args: unknown): GetScratchpadOutlineArgs {
+  if (!args || typeof args !== 'object') {
+    throw new Error('Invalid arguments: expected object');
+  }
+
+  const obj = args as Record<string, unknown>;
+
+  if (typeof obj['id'] !== 'string') {
+    throw new Error('Invalid arguments: id must be a string');
+  }
+
+  const result: GetScratchpadOutlineArgs = {
+    id: obj['id'],
+  };
+
+  if (obj['max_depth'] !== undefined) {
+    if (typeof obj['max_depth'] !== 'number' || !Number.isInteger(obj['max_depth']) || obj['max_depth'] < 1 || obj['max_depth'] > 6) {
+      throw new Error('Invalid arguments: max_depth must be an integer between 1 and 6');
+    }
+    result.max_depth = obj['max_depth'];
+  }
+
+  if (obj['include_line_numbers'] !== undefined) {
+    if (typeof obj['include_line_numbers'] !== 'boolean') {
+      throw new Error('Invalid arguments: include_line_numbers must be a boolean');
+    }
+    result.include_line_numbers = obj['include_line_numbers'];
+  }
+
+  if (obj['include_content_preview'] !== undefined) {
+    if (typeof obj['include_content_preview'] !== 'boolean') {
+      throw new Error('Invalid arguments: include_content_preview must be a boolean');
+    }
+    result.include_content_preview = obj['include_content_preview'];
   }
 
   return result;
