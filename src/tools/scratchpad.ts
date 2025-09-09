@@ -117,10 +117,9 @@ class LineEditor {
   ): { newContent: string; operationDetails: any } {
     // Handle empty content case
     const lines = originalContent === '' ? [] : originalContent.split('\n');
-    const totalLines = lines.length;
 
     let newLines: string[];
-    let operationDetails: any = {
+    const operationDetails: any = {
       mode: args.mode,
       lines_affected: 0,
       size_change_bytes: 0,
@@ -133,14 +132,15 @@ class LineEditor {
         operationDetails.lines_affected = newLines.length;
         break;
 
-      case 'insert_at_line':
+      case 'insert_at_line': {
         const insertResult = LineEditor.insertAtLine(lines, args.content, args.line_number!);
         newLines = insertResult.lines;
         operationDetails.lines_affected = args.content.split('\n').length;
         operationDetails.insertion_point = insertResult.actualInsertionPoint;
         break;
+      }
 
-      case 'replace_lines':
+      case 'replace_lines': {
         const result = LineEditor.replaceLines(
           lines,
           args.content,
@@ -154,13 +154,15 @@ class LineEditor {
           end_line: args.end_line!,
         };
         break;
+      }
 
-      case 'append_section':
+      case 'append_section': {
         const sectionResult = LineEditor.appendSection(lines, args.content, args.section_marker!);
         newLines = sectionResult.lines;
         operationDetails.lines_affected = args.content.split('\n').length;
         operationDetails.insertion_point = sectionResult.insertionPoint;
         break;
+      }
 
       default:
         throw new Error(`Unknown edit mode: ${(args as any).mode}`);

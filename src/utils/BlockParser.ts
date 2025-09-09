@@ -84,7 +84,7 @@ export class BlockParser {
     }
 
     // 第一個 block：從開始到第一個分隔符
-    const firstSplitter = uniqueSplitters[0];
+    const firstSplitter = uniqueSplitters[0]!;
     blocks.push({
       content: content.substring(0, firstSplitter.position),
       index: 0,
@@ -95,8 +95,8 @@ export class BlockParser {
 
     // 中間的 blocks
     for (let i = 0; i < uniqueSplitters.length - 1; i++) {
-      const currentSplitter = uniqueSplitters[i];
-      const nextSplitter = uniqueSplitters[i + 1];
+      const currentSplitter = uniqueSplitters[i]!;
+      const nextSplitter = uniqueSplitters[i + 1]!;
       const startPos = currentSplitter.position + currentSplitter.splitter.length;
 
       blocks.push({
@@ -109,7 +109,7 @@ export class BlockParser {
     }
 
     // 最後一個 block：從最後分隔符到結尾（包括空 block）
-    const lastSplitter = uniqueSplitters[uniqueSplitters.length - 1];
+    const lastSplitter = uniqueSplitters[uniqueSplitters.length - 1]!;
     const lastStartPos = lastSplitter.position + lastSplitter.splitter.length;
     // 無論是否有內容都要建立最後一個 block（即使是空的）
     blocks.push({
@@ -240,16 +240,16 @@ export class BlockParser {
     }
 
     if (blocks.length === 1) {
-      return blocks[0].content;
+      return blocks[0]!.content;
     }
 
     // 分析原始內容中使用的分隔符類型
-    let result = blocks[0].content;
+    let result = blocks[0]!.content;
 
     for (let i = 1; i < blocks.length; i++) {
       // 檢查原始內容中這兩個 block 之間使用的分隔符
-      const prevBlock = blocks[i - 1];
-      const currentBlock = blocks[i];
+      const prevBlock = blocks[i - 1]!;
+      const currentBlock = blocks[i]!;
 
       const betweenContent = originalContent.substring(
         prevBlock.endPosition,
