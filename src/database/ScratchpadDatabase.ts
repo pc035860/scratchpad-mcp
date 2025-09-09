@@ -28,7 +28,7 @@ import type {
   ListScratchpadsParams,
   SearchScratchpadsParams,
 } from './types.js';
-import { assertScratchpad, assertWorkflowDbRow, assertVersionResult } from './types.js';
+import { assertScratchpad, assertWorkflowDbRow } from './types.js';
 
 export class ScratchpadDatabase {
   private db: Database.Database;

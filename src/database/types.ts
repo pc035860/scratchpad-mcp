@@ -64,13 +64,13 @@ export function isScratchpad(obj: unknown): obj is Scratchpad {
   const candidate = obj as Record<string, unknown>;
 
   return (
-    typeof candidate.id === 'string' &&
-    typeof candidate.workflow_id === 'string' &&
-    typeof candidate.title === 'string' &&
-    typeof candidate.content === 'string' &&
-    typeof candidate.created_at === 'number' &&
-    typeof candidate.updated_at === 'number' &&
-    typeof candidate.size_bytes === 'number'
+    typeof candidate['id'] === 'string' &&
+    typeof candidate['workflow_id'] === 'string' &&
+    typeof candidate['title'] === 'string' &&
+    typeof candidate['content'] === 'string' &&
+    typeof candidate['created_at'] === 'number' &&
+    typeof candidate['updated_at'] === 'number' &&
+    typeof candidate['size_bytes'] === 'number'
   );
 }
 
@@ -85,14 +85,14 @@ export function isWorkflowDbRow(obj: unknown): obj is WorkflowDbRow {
   const candidate = obj as Record<string, unknown>;
 
   return (
-    typeof candidate.id === 'string' &&
-    typeof candidate.name === 'string' &&
-    (candidate.description === null || typeof candidate.description === 'string') &&
-    typeof candidate.created_at === 'number' &&
-    typeof candidate.updated_at === 'number' &&
-    typeof candidate.scratchpad_count === 'number' &&
-    typeof candidate.is_active === 'number' && // SQLite boolean as 0/1
-    (candidate.project_scope === null || typeof candidate.project_scope === 'string')
+    typeof candidate['id'] === 'string' &&
+    typeof candidate['name'] === 'string' &&
+    (candidate['description'] === null || typeof candidate['description'] === 'string') &&
+    typeof candidate['created_at'] === 'number' &&
+    typeof candidate['updated_at'] === 'number' &&
+    typeof candidate['scratchpad_count'] === 'number' &&
+    typeof candidate['is_active'] === 'number' && // SQLite boolean as 0/1
+    (candidate['project_scope'] === null || typeof candidate['project_scope'] === 'string')
   );
 }
 
@@ -103,7 +103,7 @@ export function isVersionQueryResult(obj: unknown): obj is { value: string } {
   return (
     obj !== null &&
     typeof obj === 'object' &&
-    typeof (obj as Record<string, unknown>).value === 'string'
+    typeof (obj as Record<string, unknown>)['value'] === 'string'
   );
 }
 
