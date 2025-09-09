@@ -207,14 +207,16 @@ describe('MCP Tools Project Scope Integration', () => {
       expect(result.message).toContain('(scope: frontend-app)');
     });
 
-    it('should get latest active workflow globally when no project_scope', async () => {
+    it('should return no workflow found message for non-existent project_scope', async () => {
       const getLatestActiveWorkflow = getLatestActiveWorkflowTool(db);
       
-      const globalArgs = validateGetLatestActiveWorkflowArgs({});
-      const result = await getLatestActiveWorkflow(globalArgs);
+      const nonExistentArgs = validateGetLatestActiveWorkflowArgs({
+        project_scope: 'test-project'
+      });
+      const result = await getLatestActiveWorkflow(nonExistentArgs);
 
-      expect(result.workflow).not.toBeNull();
-      expect(result.message).not.toContain('(scope:');
+      expect(result.workflow).toBeNull();
+      expect(result.message).toBe('No active workflow found in scope "test-project"');
     });
 
     it('should return null for project_scope with no workflows', async () => {
@@ -257,9 +259,10 @@ describe('MCP Tools Project Scope Integration', () => {
       });
       expect(validArgs.project_scope).toBe('my-project');
 
-      // No project_scope (should be undefined)
-      const noScopeArgs = validateGetLatestActiveWorkflowArgs({});
-      expect(noScopeArgs.project_scope).toBeUndefined();
+      // Missing project_scope should throw
+      expect(() => {
+        validateGetLatestActiveWorkflowArgs({});
+      }).toThrow('project_scope must be a string');
 
       // Invalid project_scope type should throw
       expect(() => {

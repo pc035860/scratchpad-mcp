@@ -253,9 +253,10 @@ class ScratchpadMCPServer {
               properties: {
                 project_scope: {
                   type: 'string',
-                  description: 'Optional project scope to filter workflows by project',
+                  description: 'Project scope to filter workflows by project',
                 },
               },
+              required: ['project_scope'],
             },
           },
           {
@@ -371,7 +372,8 @@ class ScratchpadMCPServer {
                 },
                 tail_size: {
                   type: 'object',
-                  description: 'Tail size specification - choose either lines OR chars OR blocks, not multiple',
+                  description:
+                    'Tail size specification - choose either lines OR chars OR blocks, not multiple',
                   oneOf: [
                     {
                       type: 'object',
@@ -451,7 +453,8 @@ class ScratchpadMCPServer {
           },
           {
             name: 'update-scratchpad',
-            description: 'Enhanced multi-mode scratchpad editing tool. Supports four editing modes: replace (complete replacement), insert_at_line (insert at specific line), replace_lines (replace line range), append_section (smart append after markdown section marker). Provides detailed operation feedback.',
+            description:
+              'Enhanced multi-mode scratchpad editing tool. Supports four editing modes: replace (complete replacement), insert_at_line (insert at specific line), replace_lines (replace line range), append_section (smart append after markdown section marker). Provides detailed operation feedback.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -489,7 +492,8 @@ class ScratchpadMCPServer {
                 },
                 section_marker: {
                   type: 'string',
-                  description: 'Section marker for append_section mode (e.g., "## Features", "# TODO")',
+                  description:
+                    'Section marker for append_section mode (e.g., "## Features", "# TODO")',
                 },
               },
               required: ['id', 'mode', 'content'],
@@ -591,13 +595,15 @@ class ScratchpadMCPServer {
                 },
                 context_lines: {
                   type: 'number',
-                  description: 'Number of lines to show both before and after each match (shorthand, 0-50)',
+                  description:
+                    'Number of lines to show both before and after each match (shorthand, 0-50)',
                   minimum: 0,
                   maximum: 50,
                 },
                 max_context_matches: {
                   type: 'number',
-                  description: 'Maximum number of matches to show context for (default: 5, max: 20)',
+                  description:
+                    'Maximum number of matches to show context for (default: 5, max: 20)',
                   minimum: 1,
                   maximum: 20,
                 },
@@ -610,7 +616,7 @@ class ScratchpadMCPServer {
                   description: 'Whether to show line numbers in context output',
                 },
               },
-              required: ['query'],
+              required: ['query', 'workflow_id'],
             },
           },
           {

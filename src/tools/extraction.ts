@@ -24,7 +24,7 @@ const buildWorkflowContext = (scratchpads: Scratchpad[]): string => {
 
   // Sort scratchpads by update time (most recent last) to emphasize temporal flow
   const sortedScratchpads = [...scratchpads].sort((a, b) => a.updated_at - b.updated_at);
-  
+
   let context = `Workflow contains ${scratchpads.length} scratchpad(s) arranged chronologically by last update:\n\n`;
 
   sortedScratchpads.forEach((scratchpad, index) => {
@@ -32,13 +32,15 @@ const buildWorkflowContext = (scratchpads: Scratchpad[]): string => {
     context += `Created: ${formatTimestamp(scratchpad.created_at)}\n`;
     context += `Last Updated: ${formatTimestamp(scratchpad.updated_at)}\n`;
     context += `Size: ${scratchpad.size_bytes} bytes (append-based growth)\n`;
-    
+
     // Calculate time since creation to indicate append activity
-    const daysSinceCreation = Math.floor((scratchpad.updated_at - scratchpad.created_at) / (24 * 60 * 60));
+    const daysSinceCreation = Math.floor(
+      (scratchpad.updated_at - scratchpad.created_at) / (24 * 60 * 60)
+    );
     if (daysSinceCreation > 0) {
       context += `Active Duration: ${daysSinceCreation} day(s) of append activity\n`;
     }
-    
+
     context += `\nContent (chronological append order, most recent at bottom):\n${scratchpad.content}\n\n`;
     context += `--- End of ${scratchpad.title} ---\n\n`;
   });
@@ -138,7 +140,8 @@ ${args.extraction_prompt}
       // Use Response API with model-specific parameters and instructions
       const apiParams: any = {
         model: model,
-        instructions: 'You are an expert workflow analyzer specializing in development project analysis. Focus on extracting precise information from workflow scratchpads with comprehensive, evidence-based analysis.',
+        instructions:
+          'You are an expert workflow analyzer specializing in development project analysis. Focus on extracting precise information from workflow scratchpads with comprehensive, evidence-based analysis.',
         input: inputText,
       };
 

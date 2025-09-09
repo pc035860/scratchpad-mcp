@@ -17,10 +17,7 @@ import type {
   ExtractWorkflowInfoArgs,
 } from './tools/index.js';
 
-import type { 
-  EnhancedUpdateScratchpadArgs, 
-  EditMode 
-} from './database/types.js';
+import type { EnhancedUpdateScratchpadArgs, EditMode } from './database/types.js';
 
 /**
  * Type guard and validator functions for MCP tool arguments
@@ -235,16 +232,14 @@ export function validateSearchScratchpadsArgs(args: unknown): SearchScratchpadsA
     throw new Error('Invalid arguments: query must be a string');
   }
 
+  if (typeof obj['workflow_id'] !== 'string') {
+    throw new Error('Invalid arguments: workflow_id must be a string');
+  }
+
   const result: SearchScratchpadsArgs = {
     query: obj['query'],
+    workflow_id: obj['workflow_id'],
   };
-
-  if (obj['workflow_id'] !== undefined) {
-    if (typeof obj['workflow_id'] !== 'string') {
-      throw new Error('Invalid arguments: workflow_id must be a string');
-    }
-    result.workflow_id = obj['workflow_id'];
-  }
 
   if (obj['limit'] !== undefined) {
     if (typeof obj['limit'] !== 'number' || !Number.isInteger(obj['limit']) || obj['limit'] < 0) {
@@ -304,7 +299,9 @@ export function validateSearchScratchpadsArgs(args: unknown): SearchScratchpadsA
       obj['context_lines_before'] < 0 ||
       obj['context_lines_before'] > 50
     ) {
-      throw new Error('Invalid arguments: context_lines_before must be an integer between 0 and 50');
+      throw new Error(
+        'Invalid arguments: context_lines_before must be an integer between 0 and 50'
+      );
     }
     result.context_lines_before = obj['context_lines_before'];
   }
@@ -495,14 +492,14 @@ export function validateGetLatestActiveWorkflowArgs(args: unknown): GetLatestAct
   }
 
   const obj = args as Record<string, unknown>;
-  const result: GetLatestActiveWorkflowArgs = {};
 
-  if (obj['project_scope'] !== undefined) {
-    if (typeof obj['project_scope'] !== 'string') {
-      throw new Error('Invalid arguments: project_scope must be a string');
-    }
-    result.project_scope = obj['project_scope'];
+  if (typeof obj['project_scope'] !== 'string') {
+    throw new Error('Invalid arguments: project_scope must be a string');
   }
+
+  const result: GetLatestActiveWorkflowArgs = {
+    project_scope: obj['project_scope'],
+  };
 
   return result;
 }
@@ -540,7 +537,9 @@ export function validateTailScratchpadArgs(args: unknown): TailScratchpadArgs {
 
     const specifiedCount = [hasLines, hasChars, hasBlocks].filter(Boolean).length;
     if (specifiedCount > 1) {
-      throw new Error('Invalid arguments: tail_size must specify either lines OR chars OR blocks, not multiple');
+      throw new Error(
+        'Invalid arguments: tail_size must specify either lines OR chars OR blocks, not multiple'
+      );
     }
 
     if (hasLines) {
@@ -616,7 +615,11 @@ export function validateChopScratchpadArgs(args: unknown): ChopScratchpadArgs {
   }
 
   if (obj['blocks'] !== undefined) {
-    if (typeof obj['blocks'] !== 'number' || !Number.isInteger(obj['blocks']) || obj['blocks'] < 1) {
+    if (
+      typeof obj['blocks'] !== 'number' ||
+      !Number.isInteger(obj['blocks']) ||
+      obj['blocks'] < 1
+    ) {
       throw new Error('Invalid arguments: blocks must be a positive integer');
     }
     result.blocks = obj['blocks'];
@@ -711,7 +714,9 @@ export function validateEnhancedUpdateScratchpadArgs(args: unknown): EnhancedUpd
     id: obj['id'].trim(),
     mode,
     content: obj['content'],
-    ...(obj['include_content'] !== undefined && { include_content: obj['include_content'] as boolean }),
+    ...(obj['include_content'] !== undefined && {
+      include_content: obj['include_content'] as boolean,
+    }),
   };
 
   // Mode-specific conditional parameter validation
@@ -723,25 +728,31 @@ export function validateEnhancedUpdateScratchpadArgs(args: unknown): EnhancedUpd
 
     case 'insert_at_line':
       if (typeof obj['line_number'] !== 'number' || !Number.isInteger(obj['line_number'])) {
-        throw new Error('Invalid arguments: line_number is required for insert_at_line mode and must be an integer');
+        throw new Error(
+          'Invalid arguments: line_number is required for insert_at_line mode and must be an integer'
+        );
       }
       if (obj['line_number'] < 1) {
         throw new Error('Invalid arguments: line_number must be >= 1 (1-based indexing)');
       }
       result.line_number = obj['line_number'];
       validateNoExtraParameters(
-        obj, 
-        ['id', 'mode', 'content', 'include_content', 'line_number'], 
+        obj,
+        ['id', 'mode', 'content', 'include_content', 'line_number'],
         'insert_at_line'
       );
       break;
 
     case 'replace_lines':
       if (typeof obj['start_line'] !== 'number' || !Number.isInteger(obj['start_line'])) {
-        throw new Error('Invalid arguments: start_line is required for replace_lines mode and must be an integer');
+        throw new Error(
+          'Invalid arguments: start_line is required for replace_lines mode and must be an integer'
+        );
       }
       if (typeof obj['end_line'] !== 'number' || !Number.isInteger(obj['end_line'])) {
-        throw new Error('Invalid arguments: end_line is required for replace_lines mode and must be an integer');
+        throw new Error(
+          'Invalid arguments: end_line is required for replace_lines mode and must be an integer'
+        );
       }
       if (obj['start_line'] < 1) {
         throw new Error('Invalid arguments: start_line must be >= 1 (1-based indexing)');
@@ -755,20 +766,22 @@ export function validateEnhancedUpdateScratchpadArgs(args: unknown): EnhancedUpd
       result.start_line = obj['start_line'];
       result.end_line = obj['end_line'];
       validateNoExtraParameters(
-        obj, 
-        ['id', 'mode', 'content', 'include_content', 'start_line', 'end_line'], 
+        obj,
+        ['id', 'mode', 'content', 'include_content', 'start_line', 'end_line'],
         'replace_lines'
       );
       break;
 
     case 'append_section':
       if (typeof obj['section_marker'] !== 'string' || obj['section_marker'].trim().length === 0) {
-        throw new Error('Invalid arguments: section_marker is required for append_section mode and must be a non-empty string');
+        throw new Error(
+          'Invalid arguments: section_marker is required for append_section mode and must be a non-empty string'
+        );
       }
       result.section_marker = obj['section_marker'].trim();
       validateNoExtraParameters(
-        obj, 
-        ['id', 'mode', 'content', 'include_content', 'section_marker'], 
+        obj,
+        ['id', 'mode', 'content', 'include_content', 'section_marker'],
         'append_section'
       );
       break;
@@ -790,11 +803,11 @@ function validateNoExtraParameters(
   allowedParams: string[],
   mode: string
 ): void {
-  const extraParams = Object.keys(obj).filter(key => !allowedParams.includes(key));
+  const extraParams = Object.keys(obj).filter((key) => !allowedParams.includes(key));
   if (extraParams.length > 0) {
     throw new Error(
       `Invalid arguments for ${mode} mode: unexpected parameters: ${extraParams.join(', ')}. ` +
-      `Allowed parameters: ${allowedParams.join(', ')}`
+        `Allowed parameters: ${allowedParams.join(', ')}`
     );
   }
 }

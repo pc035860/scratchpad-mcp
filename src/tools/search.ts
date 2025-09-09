@@ -2,11 +2,7 @@
  * Search tools
  */
 import type { ScratchpadDatabase } from '../database/index.js';
-import type {
-  ToolHandler,
-  SearchScratchpadsArgs,
-  SearchScratchpadsResult,
-} from './types.js';
+import type { ToolHandler, SearchScratchpadsArgs, SearchScratchpadsResult } from './types.js';
 
 /**
  * Convert Unix timestamp to local timezone ISO string
@@ -22,42 +18,45 @@ const generatePreview = (content: string, maxLength = 200): string => {
   if (content.length <= maxLength) {
     return content;
   }
-  
+
   // Try to break at word boundary near the limit
   const truncated = content.substring(0, maxLength);
   const lastSpace = truncated.lastIndexOf(' ');
   const breakPoint = lastSpace > maxLength * 0.8 ? lastSpace : maxLength;
-  
+
   return content.substring(0, breakPoint) + '...';
 };
 
 /**
  * Format scratchpad object with ISO timestamp strings and optional content control
  */
-const formatScratchpad = (scratchpad: any, options?: {
-  preview_mode?: boolean;
-  max_content_chars?: number;
-  include_content?: boolean;
-}) => {
+const formatScratchpad = (
+  scratchpad: any,
+  options?: {
+    preview_mode?: boolean;
+    max_content_chars?: number;
+    include_content?: boolean;
+  }
+) => {
   const formatted = {
     ...scratchpad,
     created_at: formatTimestamp(scratchpad.created_at),
     updated_at: formatTimestamp(scratchpad.updated_at),
   };
-  
+
   // Smart default logic: if max_content_chars is specified but include_content is undefined,
   // assume user wants content (they specified a char limit for a reason)
   let effectiveIncludeContent = options?.include_content;
   if (effectiveIncludeContent === undefined && options?.max_content_chars !== undefined) {
     effectiveIncludeContent = true;
   }
-  
+
   // Parameter conflict detection and warning
   let parameterWarning: string | undefined;
   if (options?.include_content === false && options?.max_content_chars !== undefined) {
     parameterWarning = `Parameter conflict: max_content_chars (${options.max_content_chars}) ignored due to include_content=false`;
   }
-  
+
   // Handle content control with improved logic
   if (effectiveIncludeContent === false) {
     formatted.content = '';
@@ -76,19 +75,21 @@ const formatScratchpad = (scratchpad: any, options?: {
     formatted.original_size = originalLength;
     formatted.content_control_applied = `truncated to ${options.max_content_chars} chars`;
   }
-  
+
   return formatted;
 };
 
 /**
  * Search scratchpads using FTS5 or LIKE fallback
  */
-export const searchScratchpadsTool = (db: ScratchpadDatabase): ToolHandler<SearchScratchpadsArgs, SearchScratchpadsResult> => {
+export const searchScratchpadsTool = (
+  db: ScratchpadDatabase
+): ToolHandler<SearchScratchpadsArgs, SearchScratchpadsResult> => {
   return async (args: SearchScratchpadsArgs): Promise<SearchScratchpadsResult> => {
     try {
       // Validate context parameters
       const validationErrors: string[] = [];
-      
+
       // Validate context_lines parameters
       if (args.context_lines !== undefined) {
         if (args.context_lines < 0 || args.context_lines > 50) {
@@ -96,31 +97,42 @@ export const searchScratchpadsTool = (db: ScratchpadDatabase): ToolHandler<Searc
         }
         // Warn about conflicting parameters
         if (args.context_lines_before !== undefined || args.context_lines_after !== undefined) {
-          validationErrors.push('context_lines conflicts with context_lines_before/after - context_lines will take precedence');
+          validationErrors.push(
+            'context_lines conflicts with context_lines_before/after - context_lines will take precedence'
+          );
         }
       }
-      
-      if (args.context_lines_before !== undefined && (args.context_lines_before < 0 || args.context_lines_before > 50)) {
+
+      if (
+        args.context_lines_before !== undefined &&
+        (args.context_lines_before < 0 || args.context_lines_before > 50)
+      ) {
         validationErrors.push('context_lines_before must be between 0 and 50');
       }
-      
-      if (args.context_lines_after !== undefined && (args.context_lines_after < 0 || args.context_lines_after > 50)) {
+
+      if (
+        args.context_lines_after !== undefined &&
+        (args.context_lines_after < 0 || args.context_lines_after > 50)
+      ) {
         validationErrors.push('context_lines_after must be between 0 and 50');
       }
-      
-      if (args.max_context_matches !== undefined && (args.max_context_matches < 1 || args.max_context_matches > 20)) {
+
+      if (
+        args.max_context_matches !== undefined &&
+        (args.max_context_matches < 1 || args.max_context_matches > 20)
+      ) {
         validationErrors.push('max_context_matches must be between 1 and 20');
       }
-      
+
       // Check for hard errors vs warnings
-      const hardErrors = validationErrors.filter(error => !error.includes('conflicts'));
+      const hardErrors = validationErrors.filter((error) => !error.includes('conflicts'));
       if (hardErrors.length > 0) {
         throw new Error(`Parameter validation failed: ${hardErrors.join(', ')}`);
       }
-      
+
       // More conservative search limits to prevent context overflow
       const limit = Math.min(args.limit ?? 10, 20); // Reduced defaults for search
-      
+
       const searchResults = db.searchScratchpads({
         query: args.query,
         workflow_id: args.workflow_id ?? undefined,
@@ -146,19 +158,20 @@ export const searchScratchpadsTool = (db: ScratchpadDatabase): ToolHandler<Searc
       // Generate snippets and format results
       const results = searchResults.map((result) => {
         let snippet: string;
-        
+
         // Check if context-based snippet is requested
-        const hasContextParams = args.context_lines !== undefined || 
-                                 args.context_lines_before !== undefined || 
-                                 args.context_lines_after !== undefined;
-                                 
+        const hasContextParams =
+          args.context_lines !== undefined ||
+          args.context_lines_before !== undefined ||
+          args.context_lines_after !== undefined;
+
         if (hasContextParams) {
           // Use context-based snippet generation
-          
+
           // Handle parameter priority: context_lines has precedence over individual before/after
           const linesBefore = args.context_lines ?? args.context_lines_before ?? 2;
           const linesAfter = args.context_lines ?? args.context_lines_after ?? 2;
-          
+
           const contextOptions: ContextSnippetOptions = {
             lines_before: linesBefore,
             lines_after: linesAfter,
@@ -166,14 +179,14 @@ export const searchScratchpadsTool = (db: ScratchpadDatabase): ToolHandler<Searc
             merge_overlapping: args.merge_context ?? true,
             show_line_numbers: args.show_line_numbers ?? false,
           };
-          
+
           snippet = generateContextSnippet(result.scratchpad.content, args.query, contextOptions);
         } else {
           // Use original character-based snippet generation
           const snippetLength = args.preview_mode ? 100 : 150;
           snippet = generateSnippet(result.scratchpad.content, args.query, snippetLength);
         }
-        
+
         return {
           scratchpad: formatScratchpad(result.scratchpad, formatOptions),
           workflow: {
@@ -187,26 +200,31 @@ export const searchScratchpadsTool = (db: ScratchpadDatabase): ToolHandler<Searc
       });
 
       // Check if any results have warnings or content control applied
-      const hasWarnings = results.some(r => r.scratchpad.parameter_warning);
-      const hasContentControl = results.some(r => r.scratchpad.content_control_applied);
-      
+      const hasWarnings = results.some((r) => r.scratchpad.parameter_warning);
+      const hasContentControl = results.some((r) => r.scratchpad.content_control_applied);
+
       // Extract context information for message
-      const hasContextParams = args.context_lines !== undefined || 
-                               args.context_lines_before !== undefined || 
-                               args.context_lines_after !== undefined;
-      const contextWarnings = validationErrors.filter(error => error.includes('conflicts'));
-      
+      const hasContextParams =
+        args.context_lines !== undefined ||
+        args.context_lines_before !== undefined ||
+        args.context_lines_after !== undefined;
+      const contextWarnings = validationErrors.filter((error) => error.includes('conflicts'));
+
       let message = `Found ${results.length} results for "${args.query}" using ${searchMethod}`;
       if (hasContextParams) {
-        const contextMode = args.context_lines !== undefined ? `±${args.context_lines}` : 
-                           `${args.context_lines_before ?? 2}/${args.context_lines_after ?? 2}`;
+        const contextMode =
+          args.context_lines !== undefined
+            ? `±${args.context_lines}`
+            : `${args.context_lines_before ?? 2}/${args.context_lines_after ?? 2}`;
         message += ` - Using context mode (${contextMode} lines)`;
       }
-      
+
       if (contextWarnings.length > 0) message += ` - Warning: ${contextWarnings.join(', ')}`;
-      else if (hasWarnings) message += ` - Some results have parameter conflicts (check parameter_warning)`;
-      else if (hasContentControl) message += ` - Content control applied to results (check content_control_applied)`;
-      
+      else if (hasWarnings)
+        message += ` - Some results have parameter conflicts (check parameter_warning)`;
+      else if (hasContentControl)
+        message += ` - Content control applied to results (check content_control_applied)`;
+
       return {
         results,
         count: results.length,
@@ -215,7 +233,9 @@ export const searchScratchpadsTool = (db: ScratchpadDatabase): ToolHandler<Searc
         message,
       };
     } catch (error) {
-      throw new Error(`Failed to search scratchpads: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(
+        `Failed to search scratchpads: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
     }
   };
 };
@@ -226,27 +246,25 @@ export const searchScratchpadsTool = (db: ScratchpadDatabase): ToolHandler<Searc
 function generateSnippet(content: string, query: string, maxLength: number): string {
   const lowerContent = content.toLowerCase();
   const lowerQuery = query.toLowerCase();
-  
+
   const queryIndex = lowerContent.indexOf(lowerQuery);
-  
+
   if (queryIndex === -1) {
     // Query not found, return beginning of content
-    return content.length > maxLength 
-      ? content.substring(0, maxLength) + '...'
-      : content;
+    return content.length > maxLength ? content.substring(0, maxLength) + '...' : content;
   }
 
   // Calculate start and end positions for snippet
   const halfLength = Math.floor((maxLength - query.length) / 2);
   const start = Math.max(0, queryIndex - halfLength);
   const end = Math.min(content.length, queryIndex + query.length + halfLength);
-  
+
   let snippet = content.substring(start, end);
-  
+
   // Add ellipsis if we're not at the beginning/end
   if (start > 0) snippet = '...' + snippet;
   if (end < content.length) snippet = snippet + '...';
-  
+
   return snippet;
 }
 
@@ -278,13 +296,13 @@ function mergeOverlappingRanges(ranges: ContextRange[]): ContextRange[] {
 
   // Sort ranges by start position
   ranges.sort((a, b) => a.start - b.start);
-  
+
   const merged: ContextRange[] = [ranges[0]!]; // Non-null assertion since we checked length > 0
-  
+
   for (let i = 1; i < ranges.length; i++) {
     const current = ranges[i]!; // Non-null assertion
     const last = merged[merged.length - 1]!; // Non-null assertion
-    
+
     // Check if ranges overlap or are adjacent (allowing 1-line gap)
     if (current.start <= last.end + 1) {
       // Merge ranges
@@ -296,7 +314,7 @@ function mergeOverlappingRanges(ranges: ContextRange[]): ContextRange[] {
       merged.push(current);
     }
   }
-  
+
   return merged;
 }
 
@@ -306,13 +324,13 @@ function mergeOverlappingRanges(ranges: ContextRange[]): ContextRange[] {
 function findMatchingLines(lines: string[], query: string): number[] {
   const lowerQuery = query.toLowerCase();
   const matchingLines: number[] = [];
-  
+
   lines.forEach((line, index) => {
     if (line.toLowerCase().includes(lowerQuery)) {
       matchingLines.push(index);
     }
   });
-  
+
   return matchingLines;
 }
 
@@ -320,47 +338,47 @@ function findMatchingLines(lines: string[], query: string): number[] {
  * Generate context-aware snippet from content with line-based context
  */
 function generateContextSnippet(
-  content: string, 
-  query: string, 
+  content: string,
+  query: string,
   options: ContextSnippetOptions
 ): string {
   const lines = content.split('\n');
   const matchingLines = findMatchingLines(lines, query);
-  
+
   if (matchingLines.length === 0) {
     // No matches found, fallback to character-based snippet
     return generateSnippet(content, query, 200);
   }
-  
+
   // Limit the number of matches to process
   const limitedMatches = matchingLines.slice(0, options.max_matches);
-  
+
   // Generate context ranges for each match
-  const contextRanges: ContextRange[] = limitedMatches.map(lineNum => ({
+  const contextRanges: ContextRange[] = limitedMatches.map((lineNum) => ({
     start: Math.max(0, lineNum - options.lines_before),
     end: Math.min(lines.length - 1, lineNum + options.lines_after),
-    matchLines: [lineNum]
+    matchLines: [lineNum],
   }));
-  
+
   // Merge overlapping ranges if requested
-  const finalRanges = options.merge_overlapping 
+  const finalRanges = options.merge_overlapping
     ? mergeOverlappingRanges(contextRanges)
     : contextRanges;
-    
+
   // Generate final output
   let result = '';
   let isFirstRange = true;
-  
+
   for (const range of finalRanges) {
     if (!isFirstRange) {
       result += '\n...\n'; // Separator between non-continuous ranges
     }
     isFirstRange = false;
-    
+
     for (let i = range.start; i <= range.end; i++) {
       const line = lines[i];
       const isMatchLine = range.matchLines.includes(i);
-      
+
       if (options.show_line_numbers) {
         const lineNum = (i + 1).toString().padStart(3, ' ');
         const marker = isMatchLine ? '★' : ' ';
@@ -371,7 +389,7 @@ function generateContextSnippet(
       }
     }
   }
-  
+
   // Remove trailing newline
   return result.trimEnd();
 }

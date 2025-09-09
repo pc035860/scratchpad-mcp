@@ -214,27 +214,27 @@ export type EditMode = 'replace' | 'insert_at_line' | 'replace_lines' | 'append_
 export interface EnhancedUpdateScratchpadArgs {
   /** Scratchpad ID to edit */
   id: string;
-  
+
   /** Edit mode to use */
   mode: EditMode;
-  
+
   /** Content to insert, replace, or append */
   content: string;
-  
+
   /** Whether to include content in response (default: false) */
   include_content?: boolean;
-  
+
   // Conditional parameters based on mode
-  
+
   /** Line number for insert_at_line mode (1-based indexing) */
   line_number?: number;
-  
+
   /** Start line for replace_lines mode (1-based, inclusive) */
   start_line?: number;
-  
+
   /** End line for replace_lines mode (1-based, inclusive) */
   end_line?: number;
-  
+
   /** Section marker for append_section mode (e.g., "## Features", "# TODO") */
   section_marker?: string;
 }
@@ -254,10 +254,10 @@ export interface EnhancedUpdateScratchpadResult {
     updated_at: string;
     size_bytes: number;
   };
-  
+
   /** Human-readable operation message */
   message: string;
-  
+
   /** Detailed operation information */
   operation_details: {
     mode: EditMode;

@@ -100,11 +100,11 @@ const formatScratchpad = (
 
 /**
  * LineEditor - Core editing engine for enhanced scratchpad updates
- * 
+ *
  * Provides unified line-based editing algorithms for four modes:
  * - replace: Complete content replacement
  * - insert_at_line: Insert content at specific line number
- * - replace_lines: Replace specific line range with new content  
+ * - replace_lines: Replace specific line range with new content
  * - append_section: Smart append after markdown section markers
  */
 class LineEditor {
@@ -156,11 +156,7 @@ class LineEditor {
         break;
 
       case 'append_section':
-        const sectionResult = LineEditor.appendSection(
-          lines,
-          args.content,
-          args.section_marker!
-        );
+        const sectionResult = LineEditor.appendSection(lines, args.content, args.section_marker!);
         newLines = sectionResult.lines;
         operationDetails.lines_affected = args.content.split('\n').length;
         operationDetails.insertion_point = sectionResult.insertionPoint;
@@ -180,13 +176,17 @@ class LineEditor {
   /**
    * Insert content at specific line number (1-based indexing)
    */
-  private static insertAtLine(lines: string[], content: string, lineNumber: number): { lines: string[]; actualInsertionPoint: number } {
+  private static insertAtLine(
+    lines: string[],
+    content: string,
+    lineNumber: number
+  ): { lines: string[]; actualInsertionPoint: number } {
     const insertLines = content === '' ? [] : content.split('\n');
     const insertIndex = Math.max(0, Math.min(lineNumber - 1, lines.length));
-    
+
     const newLines = [...lines];
     newLines.splice(insertIndex, 0, ...insertLines);
-    
+
     return {
       lines: newLines,
       actualInsertionPoint: insertIndex + 1, // Convert back to 1-based indexing
@@ -203,15 +203,15 @@ class LineEditor {
     endLine: number
   ): { lines: string[]; linesAffected: number } {
     const replaceLines = content === '' ? [] : content.split('\n');
-    
+
     // Convert to 0-based indexing and ensure valid range
     const startIndex = Math.max(0, Math.min(startLine - 1, lines.length));
     const endIndex = Math.max(0, Math.min(endLine - 1, lines.length - 1));
     const deleteCount = Math.max(0, endIndex - startIndex + 1);
-    
+
     const newLines = [...lines];
     newLines.splice(startIndex, deleteCount, ...replaceLines);
-    
+
     return {
       lines: newLines,
       linesAffected: replaceLines.length,
@@ -228,7 +228,7 @@ class LineEditor {
     sectionMarker: string
   ): { lines: string[]; insertionPoint: number } {
     const appendLines = content === '' ? [] : content.split('\n');
-    
+
     // Find the section marker
     let insertIndex = -1;
     let markerWasFound = false;
@@ -236,13 +236,13 @@ class LineEditor {
       if (lines[i]?.includes(sectionMarker)) {
         markerWasFound = true;
         insertIndex = i + 1;
-        
+
         // Look ahead to find the best insertion point after the marker
         // Skip empty lines immediately after the marker
         while (insertIndex < lines.length && lines[insertIndex]?.trim() === '') {
           insertIndex++;
         }
-        
+
         // If we found content after the marker, find the end of this section
         if (insertIndex < lines.length) {
           // Look for next section marker or significant content break
@@ -257,7 +257,7 @@ class LineEditor {
           }
           insertIndex = sectionEndIndex;
         }
-        
+
         break;
       }
     }
@@ -268,27 +268,27 @@ class LineEditor {
     }
 
     const newLines = [...lines];
-    
+
     // Separator logic based on test case analysis:
     // Add separator UNLESS we're inserting before a markdown header (# or ##)
-    // Special cases: 
+    // Special cases:
     // 1. If marker not found, don't add separator
     // 2. If multiple same markers, add separator even if next line is header
     const hasContentBefore = insertIndex > 0 && lines[insertIndex - 1]?.trim() !== '';
-    const nextLineIsHeader = insertIndex < lines.length && 
-                            lines[insertIndex]?.trim().match(/^##?\s/);
-    const isMultipleMarkerCase = markerWasFound && nextLineIsHeader && 
-                               lines[insertIndex]?.includes(sectionMarker);
-    
+    const nextLineIsHeader =
+      insertIndex < lines.length && lines[insertIndex]?.trim().match(/^##?\s/);
+    const isMultipleMarkerCase =
+      markerWasFound && nextLineIsHeader && lines[insertIndex]?.includes(sectionMarker);
+
     let needsSeparator = hasContentBefore && !nextLineIsHeader;
-    
+
     // Special case adjustments
     if (!markerWasFound) {
       needsSeparator = false; // Don't add separator when marker not found
     } else if (isMultipleMarkerCase) {
       needsSeparator = true; // Add separator for multiple marker case
     }
-    
+
     if (needsSeparator) {
       newLines.splice(insertIndex, 0, '', ...appendLines);
       return {
@@ -413,11 +413,21 @@ export const appendScratchpadTool = (
             // Perfect! Use the single scratchpad
             originalScratchpad = scratchpads[0] || null;
           } else {
-            // Multiple scratchpads - user needs to be specific
-            const scratchpadList = scratchpads.map((s) => `- "${s.title}" (${s.id})`).join('\n');
-            throw new Error(
-              `Multiple scratchpads found in workflow "${workflow.name}" (${args.id}). Please specify the scratchpad ID:\n${scratchpadList}`
+            // Multiple scratchpads - try to find one with "context" in the name
+            const contextScratchpad = scratchpads.find((s) => 
+              s.title.toLowerCase().includes('context')
             );
+            
+            if (contextScratchpad) {
+              // Found a context scratchpad, use it
+              originalScratchpad = contextScratchpad;
+            } else {
+              // No context scratchpad found - user needs to be specific
+              const scratchpadList = scratchpads.map((s) => `- "${s.title}" (${s.id})`).join('\n');
+              throw new Error(
+                `Multiple scratchpads found in workflow "${workflow.name}" (${args.id}). Please specify the scratchpad ID:\n${scratchpadList}`
+              );
+            }
           }
         } else {
           throw new Error(`Neither scratchpad nor workflow found with ID: ${args.id}`);
@@ -676,29 +686,29 @@ export const chopScratchpadTool = (
         const blocksToChop = args.blocks;
         const totalBlocks = BlockParser.getBlockCount(content);
         const actualChoppedBlocks = Math.min(blocksToChop, totalBlocks);
-        
+
         newContent = BlockParser.chopBlocks(content, actualChoppedBlocks);
-        
+
         // Calculate lines for reporting
         const originalLines = content.split('\n').length;
         const remainingLines = newContent.split('\n').length;
         choppedLines = originalLines - remainingLines;
-        
+
         choppedMessage = `Chopped ${actualChoppedBlocks} block(s) from scratchpad "${scratchpad.title}" (${totalBlocks} → ${totalBlocks - actualChoppedBlocks} blocks, ${choppedLines} lines removed)`;
       } else {
         // Handle line-based chopping (existing logic)
         const contentLines = content.split('\n');
         const totalLines = contentLines.length;
-        
+
         // Default to removing 1 line if not specified
         const linesToChop = args.lines ?? 1;
         const actualChoppedLines = Math.min(linesToChop, totalLines);
-        
+
         // Calculate the lines to keep (from the beginning)
         const linesToKeep = Math.max(0, totalLines - actualChoppedLines);
         newContent = contentLines.slice(0, linesToKeep).join('\n');
         choppedLines = actualChoppedLines;
-        
+
         choppedMessage = `Chopped ${actualChoppedLines} line(s) from scratchpad "${scratchpad.title}" (${totalLines} → ${linesToKeep} lines)`;
       }
 
@@ -779,12 +789,12 @@ export const enhancedUpdateScratchpadTool = (
 
       // Smart content control: default to include content, exclude only if explicitly requested
       const includeContent = args.include_content ?? true;
-      
+
       // Adjust message if content is not included
       if (!includeContent) {
         message += ' - Content not included in response';
       }
-      
+
       return {
         scratchpad: {
           id: updatedScratchpad.id,
