@@ -732,10 +732,17 @@ npm run dev       # Development (hot reload)
 npm run build     # Build to dist/
 npm test          # All tests
 npm run test:watch
+npm run serve     # Start web workflow viewer
 npm run typecheck
 npm run lint && npm run lint:fix
 npm run format
 npm run clean
+
+# Cloud sync and database management
+node scripts/live-sync.cjs --cloud-dir=~/Dropbox/scratchpad  # Real-time sync
+node scripts/checkpoint-database.cjs --delete-mode           # WAL management
+./scripts/install-chinese-support.sh                         # Chinese support
+
 ./start-mcp.sh < test-input.json  # Test the startup script
 ```
 
@@ -758,8 +765,12 @@ src/
     └── index.ts              # Tools module exports
 
 scripts/
-├── start-mcp.sh              # ⚠️ Startup script (ALWAYS use this)
-└── install-chinese-support.sh   # Chinese tokenization setup
+├── serve-workflow/               # Web UI workflow viewer  
+├── start-mcp.sh                 # ⚠️ Startup script (ALWAYS use this)
+├── install-chinese-support.sh   # Chinese tokenization setup
+├── live-sync.cjs                # 🌩️ Real-time cloud sync (no MCP disconnect needed)
+├── checkpoint-database.cjs      # WAL checkpoint management
+└── check-search-mode.cjs        # FTS5/LIKE search mode diagnostics
 
 tests/
 ├── database.test.ts                    # Database layer tests
@@ -800,6 +811,68 @@ extensions/
 - > 95% test coverage
 - Targets: <100ms search, 1MB content
 - Path resolution via the startup script
+
+---
+
+## 🌩️ Cloud Sync & Database Tools
+
+### Real-time Cloud Sync (`live-sync.cjs`)
+
+Sync your scratchpad database to cloud storage without disconnecting MCP servers, perfect for multi-machine workflows.
+
+**Key Features:**
+- ✅ No MCP Server disconnection required
+- ✅ Uses passive checkpoint (non-blocking)
+- ✅ Smart sync (only when files change)
+- ✅ Automatic backup with rotation
+- ✅ Works with WAL mode seamlessly
+
+#### Basic Usage
+
+```bash
+# One-time sync
+node scripts/live-sync.cjs --cloud-dir=~/Dropbox/scratchpad
+
+# Automated sync (add to crontab)
+*/30 * * * * cd /path/to/project && node scripts/live-sync.cjs --cloud-dir=~/Dropbox/scratchpad
+```
+
+#### Advanced Options
+
+```bash
+# Custom database and backup retention
+node scripts/live-sync.cjs --db=scratchpad.v6.db --cloud-dir=~/iCloud/scratchpad --keep=10
+
+# Dry run mode
+node scripts/live-sync.cjs --cloud-dir=~/Dropbox/scratchpad --dry-run --verbose
+```
+
+#### Multi-machine Setup
+
+```bash
+# On other machines, restore from cloud
+cp ~/Dropbox/scratchpad/scratchpad.v6.db ./scratchpad.v6.db
+```
+
+### Database Management Tools
+
+#### WAL Checkpoint (`checkpoint-database.cjs`)
+
+Handle WAL files and perform database maintenance:
+
+```bash
+# Process WAL files and switch to DELETE mode
+node scripts/checkpoint-database.cjs --delete-mode --db-path=scratchpad.v6.db
+```
+
+#### Search Mode Diagnostics (`check-search-mode.cjs`)
+
+Check FTS5/LIKE search mode status:
+
+```bash
+# Verify search capabilities
+node scripts/check-search-mode.cjs
+```
 
 ---
 
