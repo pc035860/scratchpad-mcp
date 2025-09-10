@@ -135,7 +135,8 @@ export OPENAI_API_KEY="your-openai-api-key"
 - `get-latest-active-workflow` - Get the most recently updated active workflow
 - `update-workflow-status` - Activate/deactivate a workflow
 - `create-scratchpad` - Create a scratchpad within a workflow
-- `get-scratchpad` - Retrieve a scratchpad by ID
+- `get-scratchpad` - Retrieve a scratchpad by ID with optional line range and context selection
+- `get-scratchpad-outline` - Parse markdown headers and return structured outline with line numbers
 - `append-scratchpad` - Append content to an existing scratchpad
 - `tail-scratchpad` - Tail content with line/char/block modes, or set `full_content=true` to get full content
 - `chop-scratchpad` - Remove lines or blocks from the end of a scratchpad (supports semantic block removal)
@@ -389,7 +390,7 @@ Get the most recently updated active workflow.
 
 ```typescript
 {
-  project_scope?: string; // optional
+  project_scope: string; // required
 }
 ```
 
@@ -421,11 +422,59 @@ Create a scratchpad within a workflow.
 
 #### `get-scratchpad`
 
-Retrieve a specific scratchpad.
+Retrieve a specific scratchpad with optional line range and context selection.
 
 ```typescript
 {
-  id: string; // required
+  id: string;                 // required
+  line_range?: {              // optional - select specific line range
+    start: number;            // >= 1 - start line number (1-based)
+    end: number;              // >= start - end line number (1-based, inclusive)
+  };
+  line_context?: {            // optional - context lines around range
+    before?: number;          // >= 0 - lines before range (default: 0)
+    after?: number;           // >= 0 - lines after range (default: 0)
+  };
+  include_block?: boolean;    // optional - include block-based context (default: false)
+}
+```
+
+**Range Selection Features:**
+- `line_range`: Extract specific line range from scratchpad content
+- `line_context`: Add context lines before/after the selected range
+- `include_block`: Use semantic block boundaries for more intelligent context extraction
+
+**Parameter Conflicts**: Cannot use `line_range`/`line_context` with `include_block` - they are mutually exclusive.
+
+#### `get-scratchpad-outline`
+
+Parse markdown headers in a scratchpad and return a structured outline with line numbers.
+
+```typescript
+{
+  id: string;                    // required - scratchpad ID
+  max_depth?: number;            // optional - maximum header depth to include (1-6, default: 6)
+  include_content?: boolean;     // optional - include full scratchpad content (default: false)
+}
+```
+
+**Features:**
+- Parses markdown headers (# ## ### #### ##### ######) and returns structured outline
+- Provides line numbers for each header for precise navigation
+- Configurable depth limit to focus on main sections
+- Returns hierarchical structure showing header relationships
+- Useful for navigation, content organization, and structured content extraction
+
+**Response Format:**
+```typescript
+{
+  outline: Array<{
+    level: number;              // Header level (1-6)
+    title: string;              // Header text content
+    line_number: number;        // Line number in scratchpad (1-based)
+  }>;
+  header_count: number;         // Total number of headers found
+  max_level: number;            // Deepest header level in content
 }
 ```
 
@@ -534,7 +583,7 @@ Full-text search with automatic Chinese tokenization and graceful fallbacks. Sup
 ```typescript
 {
   query: string;          // required
-  workflow_id?: string;   // optional
+  workflow_id: string;    // required
   limit?: number;         // default: 10, max: 20
   offset?: number;        // default: 0
   preview_mode?: boolean;
@@ -630,28 +679,48 @@ await callTool('update-scratchpad', {
   content: '\n### 最新實驗結果\n效能提升 15%，準確度達到 97.2%',
 });
 
-// 4) Intelligent Chinese search (auto-detected jieba)
+// 4) Parse document structure with get-scratchpad-outline
+const outline = await callTool('get-scratchpad-outline', {
+  id: scratchpad.id,
+  max_depth: 3,  // Only show main sections (H1-H3)
+  include_content: false,
+});
+
+// 5) Range-based content extraction with get-scratchpad
+const specificSection = await callTool('get-scratchpad', {
+  id: scratchpad.id,
+  line_range: { start: 5, end: 15 },
+  line_context: { before: 2, after: 2 },  // Add context lines
+});
+
+// 6) Block-based content extraction (semantic boundaries)
+const blockContent = await callTool('get-scratchpad', {
+  id: scratchpad.id,
+  include_block: true,  // Use semantic block boundaries instead of line ranges
+});
+
+// 7) Intelligent Chinese search (auto-detected jieba)
 const results = await callTool('search-scratchpads', {
   query: '注意力機制 自然語言',
   workflow_id: workflow.id,
   limit: 10,
 });
 
-// 5) Force tokenizer mode (English scenario)
+// 8) Force tokenizer mode (English scenario)
 const manualResults = await callTool('search-scratchpads', {
   query: 'transformer attention',
   useJieba: false,
   limit: 10,
 });
 
-// 6) Context search - basic (like grep -C 3)
+// 9) Context search - basic (like grep -C 3)
 const contextResults = await callTool('search-scratchpads', {
   query: 'error',
   context_lines: 3,
   workflow_id: workflow.id,
 });
 
-// 7) Context search - asymmetric (like grep -B 2 -A 5)
+// 10) Context search - asymmetric (like grep -B 2 -A 5)
 const asymmetricResults = await callTool('search-scratchpads', {
   query: 'function',
   context_lines_before: 2,
@@ -659,7 +728,7 @@ const asymmetricResults = await callTool('search-scratchpads', {
   show_line_numbers: true,
 });
 
-// 8) Context search - with match limits and line numbers
+// 11) Context search - with match limits and line numbers
 const limitedResults = await callTool('search-scratchpads', {
   query: 'TODO',
   context_lines: 1,
@@ -668,44 +737,44 @@ const limitedResults = await callTool('search-scratchpads', {
   merge_context: false,
 });
 
-// 9) Append mixed-language content
+// 12) Append mixed-language content
 await callTool('append-scratchpad', {
   id: scratchpad.id,
   content: '\n\n## Additional Findings\n\nFrom paper XYZ: 新發現...',
 });
 
-// 10) Get full content via tail-scratchpad (alternative to get-scratchpad)
+// 13) Get full content via tail-scratchpad (alternative to get-scratchpad)
 const fullContent = await callTool('tail-scratchpad', {
   id: scratchpad.id,
   full_content: true,
 });
 
-// 11) Traditional tail mode
+// 14) Traditional tail mode
 const recentContent = await callTool('tail-scratchpad', {
   id: scratchpad.id,
   tail_size: { lines: 10 },
 });
 
-// 12) Block-based tail extraction (NEW: semantic content handling)
+// 15) Block-based tail extraction (NEW: semantic content handling)
 const lastTwoBlocks = await callTool('tail-scratchpad', {
   id: scratchpad.id,
   tail_size: { blocks: 2 },
   include_content: true,
 });
 
-// 13) Block-based content removal (NEW: semantic content management)
+// 16) Block-based content removal (NEW: semantic content management)
 await callTool('chop-scratchpad', {
   id: scratchpad.id,
   blocks: 1, // Remove the last block instead of arbitrary lines
 });
 
-// 14) Verify block operations with precise extraction
+// 17) Verify block operations with precise extraction
 const remainingBlocks = await callTool('tail-scratchpad', {
   id: scratchpad.id,
   tail_size: { blocks: 3 }, // Get last 3 blocks for verification
 });
 
-// 15) Full content but metadata only
+// 18) Full content but metadata only
 const controlledContent = await callTool('tail-scratchpad', {
   id: scratchpad.id,
   full_content: true,
@@ -786,7 +855,7 @@ tests/
 ├── parameter-conflict.test.ts          # Parameter validation conflict tests
 ├── ux-optimization.test.ts             # UX optimization tests
 └── critical-fixes-validation-v2.test.ts # Critical fixes validation
-# (13 test files total, 247 tests passing)
+# (18 test files total, 750+ tests passing)
 
 extensions/
 ├── libsimple.dylib          # macOS simple tokenizer
@@ -800,7 +869,7 @@ extensions/
 ### Testing Strategy
 
 - Database layer: CRUD, FTS5, error and edge cases, Chinese tokenization
-- MCP tools integration: 13 tools parameter validation, scenarios, protocol compliance
+- MCP tools integration: 14 tools parameter validation, scenarios, protocol compliance
 - Performance: FTS5 <100ms, 1MB content, concurrent access, tokenization performance
 - Project scope: workflow isolation, cross-project restrictions
 
@@ -909,7 +978,7 @@ Benefits: stable working directory, proper extension/dictionary loading, DB path
 ### Architecture
 
 - Server: MCP over stdio
-- Tools: 13 core tools with comprehensive parameter validation
+- Tools: 14 core tools with comprehensive parameter validation
 - Database: SQLite with FTS5 full-text search, WAL mode, optional Chinese tokenization
 - Content Management: Block-based operations with semantic content handling via BlockParser utility
 - Append System: Enhanced splitter format (`---\n<!--- block start --->\n`) for clear content separation
