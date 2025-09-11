@@ -18,7 +18,6 @@ import {
   chopScratchpadTool,
   enhancedUpdateScratchpadTool,
   listScratchpadsTool,
-  searchScratchpadsTool,
   searchScratchpadContentTool,
   searchWorkflowsTool,
   extractWorkflowInfoTool,
@@ -33,7 +32,6 @@ import {
   validateChopScratchpadArgs,
   validateEnhancedUpdateScratchpadArgs,
   validateListScratchpadsArgs,
-  validateSearchScratchpadsArgs,
   validateSearchScratchpadContentArgs,
   validateSearchWorkflowsArgs,
   validateUpdateWorkflowStatusArgs,
@@ -91,7 +89,6 @@ class ScratchpadMCPServer {
     const listScratchpads = listScratchpadsTool(this.db);
 
     // Search tools
-    const searchScratchpads = searchScratchpadsTool(this.db);
     const searchScratchpadContent = searchScratchpadContentTool(this.db);
     const searchWorkflows = searchWorkflowsTool(this.db);
 
@@ -173,12 +170,6 @@ class ScratchpadMCPServer {
           case 'list-scratchpads': {
             const validatedArgs = validateListScratchpadsArgs(args);
             const result = await listScratchpads(validatedArgs);
-            return createToolResponse(result);
-          }
-
-          case 'search-scratchpads': {
-            const validatedArgs = validateSearchScratchpadsArgs(args);
-            const result = await searchScratchpads(validatedArgs);
             return createToolResponse(result);
           }
 
@@ -635,87 +626,6 @@ class ScratchpadMCPServer {
                 },
               },
               required: ['workflow_id'],
-            },
-          },
-          {
-            name: 'search-scratchpads',
-            description:
-              'Search for scratchpads using intelligent full-text search with multi-stage fallback. Supports context-aware search similar to grep -A -B -C. Content control same as list-scratchpads: include_content > preview_mode > max_content_chars.\n\nSEARCH BEHAVIOR:\n• Multi-word queries use AND logic with intelligent tokenization\n• Search method priority: Jieba (Chinese) → Simple → FTS5 → LIKE fallback\n• Simple tokenizer handles mixed Chinese/English content effectively\n• Single words: "authentication", "error", "component" ✓\n• Multi-word AND: "NavTop CartSwitchTabs", "guided level", "user login" ✓\n• Non-existent terms return empty results (expected behavior)\n\nUSAGE EXAMPLES:\n• Basic search: {"query": "authentication"}\n• Multi-word search: {"query": "NavTop CartSwitchTabs"} - finds content containing ALL terms\n• Context search: {"query": "error", "context_lines": 3} - Shows 3 lines before/after each match\n• Asymmetric context: {"query": "function", "context_lines_before": 2, "context_lines_after": 5}\n• With line numbers: {"query": "bug", "context_lines": 2, "show_line_numbers": true}\n• Limit matches: {"query": "TODO", "context_lines": 1, "max_context_matches": 3}\n• Chinese support: {"query": "用戶登入", "useJieba": true} - force Chinese tokenization\n• No merging: {"query": "import", "context_lines": 1, "merge_context": false}',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                query: {
-                  type: 'string',
-                  description: 'Search query string',
-                },
-                workflow_id: {
-                  type: 'string',
-                  description: 'Optional workflow ID to limit search to specific workflow',
-                },
-                limit: {
-                  type: 'number',
-                  description: 'Maximum number of results to return (default: 10, max: 20)',
-                  minimum: 1,
-                  maximum: 20,
-                },
-                offset: {
-                  type: 'number',
-                  description: 'Number of results to skip for pagination (default: 0)',
-                  minimum: 0,
-                },
-                preview_mode: {
-                  type: 'boolean',
-                  description: 'Preview mode - return truncated content for search results',
-                },
-                max_content_chars: {
-                  type: 'number',
-                  description: 'Maximum characters per scratchpad content in search results',
-                  minimum: 10,
-                },
-                include_content: {
-                  type: 'boolean',
-                  description: 'Whether to include full content in search results',
-                },
-                useJieba: {
-                  type: 'boolean',
-                  description: 'Force jieba tokenization (auto-detect by default)',
-                },
-                context_lines_before: {
-                  type: 'number',
-                  description: 'Number of lines to show before each match (0-50)',
-                  minimum: 0,
-                  maximum: 50,
-                },
-                context_lines_after: {
-                  type: 'number',
-                  description: 'Number of lines to show after each match (0-50)',
-                  minimum: 0,
-                  maximum: 50,
-                },
-                context_lines: {
-                  type: 'number',
-                  description:
-                    'Number of lines to show both before and after each match (shorthand, 0-50)',
-                  minimum: 0,
-                  maximum: 50,
-                },
-                max_context_matches: {
-                  type: 'number',
-                  description:
-                    'Maximum number of matches to show context for (default: 5, max: 20)',
-                  minimum: 1,
-                  maximum: 20,
-                },
-                merge_context: {
-                  type: 'boolean',
-                  description: 'Whether to merge overlapping context ranges (default: true)',
-                },
-                show_line_numbers: {
-                  type: 'boolean',
-                  description: 'Whether to show line numbers in context output',
-                },
-              },
-              required: ['query', 'workflow_id'],
             },
           },
           {
