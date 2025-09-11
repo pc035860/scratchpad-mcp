@@ -125,6 +125,9 @@ export SCRATCHPAD_DB_PATH="./my-scratchpad.db"
 # Required for AI analysis features: OpenAI API key
 export OPENAI_API_KEY="your-openai-api-key"
 
+# Optional: disable specific MCP tools for token optimization
+export SCRATCHPAD_DISABLED_TOOLS="get-scratchpad,get-scratchpad-outline"
+
 # Or modify start-mcp.sh directly
 ```
 
@@ -1158,6 +1161,36 @@ scratchpads_fts (FTS5 virtual table)
 ├── content (indexed)
 └── tokenize=simple     # with optional jieba
 ```
+
+### Environment Variables
+
+| Variable | Description | Default | Example |
+|----------|-------------|---------|---------|
+| `SCRATCHPAD_DB_PATH` | Database file path (relative to project root) | `./scratchpad.db` | `./my-scratchpad.db` |
+| `OPENAI_API_KEY` | OpenAI API key for AI analysis features | - | `sk-...` |
+| `SCRATCHPAD_DISABLED_TOOLS` | Comma-separated list of tools to disable for token optimization | `""` (all enabled) | `get-scratchpad,get-scratchpad-outline` |
+
+#### Tool Control Examples
+
+```bash
+# Disable get-scratchpad tool only
+export SCRATCHPAD_DISABLED_TOOLS="get-scratchpad"
+
+# Disable both tools for maximum token savings
+export SCRATCHPAD_DISABLED_TOOLS="get-scratchpad,get-scratchpad-outline"
+
+# Enable all tools (default behavior)
+unset SCRATCHPAD_DISABLED_TOOLS
+```
+
+**Available tools for disabling:**
+- `get-scratchpad` - Retrieve scratchpad content (can be replaced by `tail-scratchpad` with `full_content=true`)
+- `get-scratchpad-outline` - Parse markdown headers structure
+
+**Token Savings:**
+- Disabling `get-scratchpad`: ~200-300 tokens
+- Disabling `get-scratchpad-outline`: ~150-200 tokens
+- Total potential savings: ~350-500 tokens
 
 ### Environment Requirements
 

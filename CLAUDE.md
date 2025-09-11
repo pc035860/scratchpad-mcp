@@ -124,7 +124,9 @@ This server implements MCP for inter-agent communication via stdio. The built ex
 3. **Search & Discovery**: Finding content across workflows
 4. **AI Analysis**: GPT-powered information extraction from workflow content
 
-**Key Tool Enhancement**: `tail-scratchpad` now supports full content retrieval via `full_content: true` parameter, making it a complete alternative to `get-scratchpad` when needed.
+**Key Tool Enhancements**: 
+- `tail-scratchpad` now supports full content retrieval via `full_content: true` parameter, making it a complete alternative to `get-scratchpad` when needed.
+- Tools can be conditionally disabled using `SCRATCHPAD_DISABLED_TOOLS` environment variable for token optimization (e.g., `SCRATCHPAD_DISABLED_TOOLS="get-scratchpad,get-scratchpad-outline"` saves ~350-500 tokens).
 
 ### Development Tools
 
