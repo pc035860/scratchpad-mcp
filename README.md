@@ -143,6 +143,7 @@ export OPENAI_API_KEY="your-openai-api-key"
 - `update-scratchpad` - Multi-mode editing tool with replace/insert/replace-lines/append-section modes
 - `list-scratchpads` - List scratchpads in a workflow
 - `search-scratchpads` - Full-text search with context-aware snippets (grep-like functionality, intelligent Chinese tokenization)
+- `search-scratchpad-content` - Search within a single scratchpad content using string/regex patterns (VS Code Ctrl+F style)
 - `search-workflows` - 🆕 Search workflows with weighted scoring (5/3/3/1) based on name/description/scratchpads content
 - `extract-workflow-info` - Extract specific information from workflows using OpenAI models
 
@@ -617,6 +618,67 @@ const mixedResults = await callTool('search-workflows', {
 });
 ```
 
+#### `search-scratchpad-content` 🆕
+
+**NEW:** Search within a single scratchpad content using string or regex patterns. Similar to VS Code Ctrl+F or grep for a single file. Supports context-aware search results with line-based context.
+
+```typescript
+{
+  id: string;                     // required - scratchpad ID
+  
+  // Search parameters - exactly one must be provided
+  query?: string;                 // string search
+  queryRegex?: string;           // regex search pattern
+  
+  // Context display options
+  context_lines?: number;         // lines before & after (shorthand, 0-50)
+  context_lines_before?: number;  // lines before each match (0-50)
+  context_lines_after?: number;   // lines after each match (0-50)
+  
+  // Advanced options
+  max_context_matches?: number;   // max matches to show context (default: 5, max: 20)
+  merge_context?: boolean;        // merge overlapping context ranges (default: true)
+  show_line_numbers?: boolean;    // show line numbers in output
+  
+  // Output control (inherited)
+  include_content?: boolean;      // include content in results
+  preview_mode?: boolean;         // truncated preview
+  max_content_chars?: number;     // character limit
+}
+```
+
+**Key Features:**
+- **VS Code Style Search:** Find-in-file functionality with precise line targeting
+- **Dual Search Modes:** String literals (`query`) or regex patterns (`queryRegex`)
+- **Context Awareness:** Show surrounding lines like `grep -A -B -C`
+- **Smart Snippets:** Character-based or context-based snippet generation
+- **Match Details:** Line numbers, character positions, and match text extraction
+
+```typescript
+// Basic string search
+const stringResults = await callTool('search-scratchpad-content', {
+  id: 'scratchpad-123',
+  query: 'authentication'
+});
+
+// Regex search with context
+const regexResults = await callTool('search-scratchpad-content', {
+  id: 'scratchpad-123',
+  queryRegex: 'function\\s+\\w+Auth',
+  context_lines: 3,
+  show_line_numbers: true
+});
+
+// Advanced context control
+const contextResults = await callTool('search-scratchpad-content', {
+  id: 'scratchpad-123',
+  query: 'TODO',
+  context_lines_before: 1,
+  context_lines_after: 2,
+  max_context_matches: 10
+});
+```
+
 #### `search-scratchpads`
 
 Full-text search with automatic Chinese tokenization and graceful fallbacks. Supports context-aware search similar to grep -A -B -C.
@@ -1050,7 +1112,7 @@ Benefits: stable working directory, proper extension/dictionary loading, DB path
 ### Architecture
 
 - Server: MCP over stdio
-- Tools: 14 core tools with comprehensive parameter validation
+- Tools: 16 core tools with comprehensive parameter validation
 - Database: SQLite with FTS5 full-text search, WAL mode, optional Chinese tokenization
 - Content Management: Block-based operations with semantic content handling via BlockParser utility
 - Append System: Enhanced splitter format (`---\n<!--- block start --->\n`) for clear content separation
