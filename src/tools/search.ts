@@ -2,7 +2,13 @@
  * Search tools
  */
 import type { ScratchpadDatabase } from '../database/index.js';
-import type { ToolHandler, SearchScratchpadsArgs, SearchScratchpadsResult } from './types.js';
+import type {
+  ToolHandler,
+  SearchScratchpadsArgs,
+  SearchScratchpadsResult,
+  SearchScratchpadContentArgs,
+  SearchScratchpadContentResult,
+} from './types.js';
 
 /**
  * Convert Unix timestamp to local timezone ISO string
@@ -380,9 +386,9 @@ function generateContextSnippet(
       const isMatchLine = range.matchLines.includes(i);
 
       if (options.show_line_numbers) {
-        const lineNum = (i + 1).toString().padStart(3, ' ');
-        const marker = isMatchLine ? '★' : ' ';
-        result += `${lineNum}${marker} ${line}\n`;
+        const lineNum = (i + 1).toString();
+        const prefix = isMatchLine ? '> ' : '... ';
+        result += `${prefix}${lineNum}: ${line}\n`;
       } else {
         const marker = isMatchLine ? '► ' : '  ';
         result += `${marker}${line}\n`;
@@ -393,3 +399,156 @@ function generateContextSnippet(
   // Remove trailing newline
   return result.trimEnd();
 }
+
+/**
+ * Interface for individual match results
+ */
+interface Match {
+  line_number: number;
+  char_position: number;
+  match_text: string;
+}
+
+/**
+ * Search for string pattern in content
+ */
+function searchStringInContent(content: string, query: string): Match[] {
+  const matches: Match[] = [];
+  const lines = content.split('\n');
+  
+  lines.forEach((line, lineIndex) => {
+    let index = 0;
+    while ((index = line.indexOf(query, index)) !== -1) {
+      matches.push({
+        line_number: lineIndex + 1,
+        char_position: index,
+        match_text: query
+      });
+      index += query.length;
+    }
+  });
+  
+  return matches;
+}
+
+/**
+ * Search for regex pattern in content
+ */
+function searchRegexInContent(content: string, queryRegex: string): Match[] {
+  const matches: Match[] = [];
+  
+  try {
+    const regex = new RegExp(queryRegex, 'g');
+    const lines = content.split('\n');
+    
+    lines.forEach((line, lineIndex) => {
+      let match;
+      while ((match = regex.exec(line)) !== null) {
+        matches.push({
+          line_number: lineIndex + 1,
+          char_position: match.index,
+          match_text: match[0]
+        });
+        
+        // Prevent infinite loop on zero-width matches
+        if (match[0].length === 0) {
+          regex.lastIndex++;
+        }
+      }
+      // Reset regex for next line
+      regex.lastIndex = 0;
+    });
+  } catch (error) {
+    throw new Error(`Invalid regular expression: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+  
+  return matches;
+}
+
+/**
+ * Search within a single scratchpad content
+ */
+export const searchScratchpadContentTool = (
+  db: ScratchpadDatabase
+): ToolHandler<SearchScratchpadContentArgs, SearchScratchpadContentResult> => {
+  return async (args: SearchScratchpadContentArgs): Promise<SearchScratchpadContentResult> => {
+    // Validate search parameters
+    const hasQuery = args.query !== undefined;
+    const hasQueryRegex = args.queryRegex !== undefined;
+    
+    if (!hasQuery && !hasQueryRegex) {
+      throw new Error('Either query or queryRegex must be provided');
+    }
+    
+    if (hasQuery && hasQueryRegex) {
+      throw new Error('Cannot specify both query and queryRegex - choose one');
+    }
+    
+    // Get scratchpad
+    const scratchpad = db.getScratchpadById(args.id);
+    if (!scratchpad) {
+      throw new Error(`Scratchpad not found: ${args.id}`);
+    }
+    
+    // Perform search
+    const searchMethod = hasQuery ? 'string' : 'regex';
+    const searchTerm = hasQuery ? args.query! : args.queryRegex!;
+    
+    let matches: Match[];
+    if (hasQuery) {
+      matches = searchStringInContent(scratchpad.content, args.query!);
+    } else {
+      matches = searchRegexInContent(scratchpad.content, args.queryRegex!);
+    }
+    
+    // Generate snippets for each match
+    const hasContextParams = 
+      args.context_lines !== undefined ||
+      args.context_lines_before !== undefined ||
+      args.context_lines_after !== undefined;
+    
+    const matchesWithSnippets = matches.map((match) => {
+      let snippet: string;
+      
+      if (hasContextParams) {
+        // Use context-based snippet generation
+        const linesBefore = args.context_lines ?? args.context_lines_before ?? 2;
+        const linesAfter = args.context_lines ?? args.context_lines_after ?? 2;
+        
+        const contextOptions: ContextSnippetOptions = {
+          lines_before: linesBefore,
+          lines_after: linesAfter,
+          max_matches: args.max_context_matches ?? 5,
+          merge_overlapping: args.merge_context ?? true,
+          show_line_numbers: args.show_line_numbers ?? false,
+        };
+        
+        snippet = generateContextSnippet(scratchpad.content, searchTerm, contextOptions);
+      } else {
+        // Use character-based snippet generation
+        const snippetLength = 150;
+        snippet = generateSnippet(scratchpad.content, searchTerm, snippetLength);
+      }
+      
+      return {
+        ...match,
+        snippet,
+      };
+    });
+    
+    return {
+      scratchpad: {
+        id: scratchpad.id,
+        workflow_id: scratchpad.workflow_id,
+        title: scratchpad.title,
+        created_at: formatTimestamp(scratchpad.created_at),
+        updated_at: formatTimestamp(scratchpad.updated_at),
+        size_bytes: scratchpad.size_bytes,
+      },
+      matches: matchesWithSnippets,
+      total_matches: matches.length,
+      search_method: searchMethod,
+      message: `Found ${matches.length} matches for ${searchMethod === 'string' ? `"${searchTerm}"` : `pattern /${searchTerm}/`} in scratchpad "${scratchpad.title}"`,
+    };
+  };
+};

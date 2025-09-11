@@ -403,7 +403,7 @@ export const getScratchpadTool = (
           if (lineRange.end < 1) {
             throw new Error('line_range.end must be >= 1');
           }
-          if (lineRange.end < (lineRange.start as number)) {
+          if (lineRange.end < (lineRange.start)) {
             throw new Error('line_range.end must be >= line_range.start');
           }
         }
@@ -438,7 +438,7 @@ export const getScratchpadTool = (
           if (!Number.isInteger(lineContext.before)) {
             throw new Error('line_context.before must be an integer');
           }
-          if ((lineContext.before as number) < 0) {
+          if ((lineContext.before) < 0) {
             throw new Error('line_context.before must be >= 0');
           }
         }
@@ -449,7 +449,7 @@ export const getScratchpadTool = (
           if (!Number.isInteger(lineContext.after)) {
             throw new Error('line_context.after must be an integer');
           }
-          if ((lineContext.after as number) < 0) {
+          if ((lineContext.after) < 0) {
             throw new Error('line_context.after must be >= 0');
           }
         }

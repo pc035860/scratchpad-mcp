@@ -472,3 +472,51 @@ export interface GetScratchpadOutlineResult {
   };
   message: string;
 }
+
+// Search Scratchpad Content tool types
+export interface SearchScratchpadContentArgs extends Partial<OutputControlOptions> {
+  id: string;
+  
+  // Search parameters - exactly one must be provided
+  query?: string;      // String search
+  queryRegex?: string; // Regular expression search
+  
+  // Context lines parameters for enhanced search results (same as SearchScratchpadsArgs)
+  /** Number of lines to show before each match */
+  context_lines_before?: number;
+
+  /** Number of lines to show after each match */
+  context_lines_after?: number;
+
+  /** Number of lines to show both before and after each match (shorthand) */
+  context_lines?: number;
+
+  /** Maximum number of matches to show context for (default: 5) */
+  max_context_matches?: number;
+
+  /** Whether to merge overlapping context ranges (default: true) */
+  merge_context?: boolean;
+
+  /** Whether to show line numbers in context output */
+  show_line_numbers?: boolean;
+}
+
+export interface SearchScratchpadContentResult {
+  scratchpad: {
+    id: string;
+    workflow_id: string;
+    title: string;
+    created_at: string; // ISO string
+    updated_at: string; // ISO string
+    size_bytes: number;
+  };
+  matches: Array<{
+    line_number: number;
+    char_position: number;
+    snippet: string;
+    match_text: string;
+  }>;
+  total_matches: number;
+  search_method: 'string' | 'regex';
+  message: string;
+}

@@ -19,6 +19,7 @@ import {
   enhancedUpdateScratchpadTool,
   listScratchpadsTool,
   searchScratchpadsTool,
+  searchScratchpadContentTool,
   extractWorkflowInfoTool,
 } from './tools/index.js';
 import {
@@ -32,6 +33,7 @@ import {
   validateEnhancedUpdateScratchpadArgs,
   validateListScratchpadsArgs,
   validateSearchScratchpadsArgs,
+  validateSearchScratchpadContentArgs,
   validateUpdateWorkflowStatusArgs,
   validateListWorkflowsArgs,
   validateGetLatestActiveWorkflowArgs,
@@ -88,6 +90,7 @@ class ScratchpadMCPServer {
 
     // Search tools
     const searchScratchpads = searchScratchpadsTool(this.db);
+    const searchScratchpadContent = searchScratchpadContentTool(this.db);
 
     // GPT-5 extraction tools
     const extractWorkflowInfo = extractWorkflowInfoTool(this.db);
@@ -173,6 +176,12 @@ class ScratchpadMCPServer {
           case 'search-scratchpads': {
             const validatedArgs = validateSearchScratchpadsArgs(args);
             const result = await searchScratchpads(validatedArgs);
+            return createToolResponse(result);
+          }
+
+          case 'search-scratchpad-content': {
+            const validatedArgs = validateSearchScratchpadContentArgs(args);
+            const result = await searchScratchpadContent(validatedArgs);
             return createToolResponse(result);
           }
 
@@ -698,6 +707,76 @@ class ScratchpadMCPServer {
                 },
               },
               required: ['query', 'workflow_id'],
+            },
+          },
+          {
+            name: 'search-scratchpad-content',
+            description:
+              'Search within a single scratchpad content using string or regex patterns. Similar to VS Code Ctrl+F or grep for a single file. Supports context-aware search results with line-based context.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                id: {
+                  type: 'string',
+                  description: 'ID of the scratchpad to search within',
+                },
+                query: {
+                  type: 'string',
+                  description: 'String search pattern (cannot be used with queryRegex)',
+                },
+                queryRegex: {
+                  type: 'string',
+                  description: 'Regular expression search pattern (cannot be used with query)',
+                },
+                preview_mode: {
+                  type: 'boolean',
+                  description: 'Preview mode - return truncated content for search results',
+                },
+                max_content_chars: {
+                  type: 'number',
+                  description: 'Maximum characters per match snippet',
+                  minimum: 10,
+                },
+                include_content: {
+                  type: 'boolean',
+                  description: 'Whether to include content in search results',
+                },
+                context_lines_before: {
+                  type: 'number',
+                  description: 'Number of lines to show before each match (0-50)',
+                  minimum: 0,
+                  maximum: 50,
+                },
+                context_lines_after: {
+                  type: 'number',
+                  description: 'Number of lines to show after each match (0-50)',
+                  minimum: 0,
+                  maximum: 50,
+                },
+                context_lines: {
+                  type: 'number',
+                  description:
+                    'Number of lines to show both before and after each match (shorthand, 0-50)',
+                  minimum: 0,
+                  maximum: 50,
+                },
+                max_context_matches: {
+                  type: 'number',
+                  description:
+                    'Maximum number of matches to show context for (default: 5, max: 20)',
+                  minimum: 1,
+                  maximum: 20,
+                },
+                merge_context: {
+                  type: 'boolean',
+                  description: 'Whether to merge overlapping context ranges (default: true)',
+                },
+                show_line_numbers: {
+                  type: 'boolean',
+                  description: 'Whether to show line numbers in context output',
+                },
+              },
+              required: ['id'],
             },
           },
           {

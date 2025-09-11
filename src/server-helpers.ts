@@ -12,6 +12,7 @@ import type {
   ChopScratchpadArgs,
   ListScratchpadsArgs,
   SearchScratchpadsArgs,
+  SearchScratchpadContentArgs,
   UpdateWorkflowStatusArgs,
   ListWorkflowsArgs,
   GetLatestActiveWorkflowArgs,
@@ -907,6 +908,142 @@ export function validateEnhancedUpdateScratchpadArgs(args: unknown): EnhancedUpd
     default:
       // This should never happen due to mode validation above, but TypeScript requires it
       throw new Error(`Internal error: unhandled edit mode: ${mode}`);
+  }
+
+  return result;
+}
+
+export function validateSearchScratchpadContentArgs(args: unknown): SearchScratchpadContentArgs {
+  if (!args || typeof args !== 'object') {
+    throw new Error('Invalid arguments: expected object');
+  }
+
+  const obj = args as Record<string, unknown>;
+
+  if (typeof obj['id'] !== 'string') {
+    throw new Error('Invalid arguments: id must be a string');
+  }
+
+  // Validate search parameters - exactly one must be provided
+  const hasQuery = obj['query'] !== undefined;
+  const hasQueryRegex = obj['queryRegex'] !== undefined;
+
+  if (!hasQuery && !hasQueryRegex) {
+    throw new Error('Invalid arguments: either query or queryRegex must be provided');
+  }
+
+  if (hasQuery && hasQueryRegex) {
+    throw new Error('Invalid arguments: cannot specify both query and queryRegex - choose one');
+  }
+
+  const result: SearchScratchpadContentArgs = {
+    id: obj['id'],
+  };
+
+  // Validate query parameters
+  if (hasQuery) {
+    if (typeof obj['query'] !== 'string') {
+      throw new Error('Invalid arguments: query must be a string');
+    }
+    result.query = obj['query'];
+  }
+
+  if (hasQueryRegex) {
+    if (typeof obj['queryRegex'] !== 'string') {
+      throw new Error('Invalid arguments: queryRegex must be a string');
+    }
+    result.queryRegex = obj['queryRegex'];
+  }
+
+  // Validate output control parameters
+  if (obj['max_content_chars'] !== undefined) {
+    if (
+      typeof obj['max_content_chars'] !== 'number' ||
+      !Number.isInteger(obj['max_content_chars']) ||
+      obj['max_content_chars'] < 1
+    ) {
+      throw new Error('Invalid arguments: max_content_chars must be a positive integer');
+    }
+    result.max_content_chars = obj['max_content_chars'];
+  }
+
+  if (obj['include_content'] !== undefined) {
+    if (typeof obj['include_content'] !== 'boolean') {
+      throw new Error('Invalid arguments: include_content must be a boolean');
+    }
+    result.include_content = obj['include_content'];
+  }
+
+  if (obj['preview_mode'] !== undefined) {
+    if (typeof obj['preview_mode'] !== 'boolean') {
+      throw new Error('Invalid arguments: preview_mode must be a boolean');
+    }
+    result.preview_mode = obj['preview_mode'];
+  }
+
+  // Context lines parameters (same validation as SearchScratchpadsArgs)
+  if (obj['context_lines_before'] !== undefined) {
+    if (
+      typeof obj['context_lines_before'] !== 'number' ||
+      !Number.isInteger(obj['context_lines_before']) ||
+      obj['context_lines_before'] < 0 ||
+      obj['context_lines_before'] > 50
+    ) {
+      throw new Error(
+        'Invalid arguments: context_lines_before must be an integer between 0 and 50'
+      );
+    }
+    result.context_lines_before = obj['context_lines_before'];
+  }
+
+  if (obj['context_lines_after'] !== undefined) {
+    if (
+      typeof obj['context_lines_after'] !== 'number' ||
+      !Number.isInteger(obj['context_lines_after']) ||
+      obj['context_lines_after'] < 0 ||
+      obj['context_lines_after'] > 50
+    ) {
+      throw new Error('Invalid arguments: context_lines_after must be an integer between 0 and 50');
+    }
+    result.context_lines_after = obj['context_lines_after'];
+  }
+
+  if (obj['context_lines'] !== undefined) {
+    if (
+      typeof obj['context_lines'] !== 'number' ||
+      !Number.isInteger(obj['context_lines']) ||
+      obj['context_lines'] < 0 ||
+      obj['context_lines'] > 50
+    ) {
+      throw new Error('Invalid arguments: context_lines must be an integer between 0 and 50');
+    }
+    result.context_lines = obj['context_lines'];
+  }
+
+  if (obj['max_context_matches'] !== undefined) {
+    if (
+      typeof obj['max_context_matches'] !== 'number' ||
+      !Number.isInteger(obj['max_context_matches']) ||
+      obj['max_context_matches'] < 1 ||
+      obj['max_context_matches'] > 20
+    ) {
+      throw new Error('Invalid arguments: max_context_matches must be an integer between 1 and 20');
+    }
+    result.max_context_matches = obj['max_context_matches'];
+  }
+
+  if (obj['merge_context'] !== undefined) {
+    if (typeof obj['merge_context'] !== 'boolean') {
+      throw new Error('Invalid arguments: merge_context must be a boolean');
+    }
+    result.merge_context = obj['merge_context'];
+  }
+
+  if (obj['show_line_numbers'] !== undefined) {
+    if (typeof obj['show_line_numbers'] !== 'boolean') {
+      throw new Error('Invalid arguments: show_line_numbers must be a boolean');
+    }
+    result.show_line_numbers = obj['show_line_numbers'];
   }
 
   return result;
