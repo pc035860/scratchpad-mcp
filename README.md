@@ -143,6 +143,7 @@ export OPENAI_API_KEY="your-openai-api-key"
 - `update-scratchpad` - Multi-mode editing tool with replace/insert/replace-lines/append-section modes
 - `list-scratchpads` - List scratchpads in a workflow
 - `search-scratchpads` - Full-text search with context-aware snippets (grep-like functionality, intelligent Chinese tokenization)
+- `search-workflows` - 🆕 Search workflows with weighted scoring (5/3/3/1) based on name/description/scratchpads content
 - `extract-workflow-info` - Extract specific information from workflows using OpenAI models
 
 ---
@@ -576,6 +577,46 @@ Content control priority: `include_content` > `preview_mode` > `max_content_char
 
 ### Search & Discovery
 
+#### `search-workflows` 🆕
+
+**NEW:** Search workflows with intelligent weighted scoring based on scratchpads content. Perfect for finding relevant workflows across projects.
+
+```typescript
+{
+  query: string;          // required - supports mixed English/Chinese
+  project_scope?: string; // filter by project scope
+  page?: number;          // pagination (default: 1)
+  limit?: number;         // items per page (default: 5, max: 20)
+  useJieba?: boolean;     // force Chinese tokenization
+}
+```
+
+**Key Features:**
+- **Weighted Scoring:** workflows.name (5pts) > workflows.description (3pts) = scratchpads.title (3pts) > scratchpads.content (1pt)
+- **Mixed Language:** `"React組件開發"` → English: `["React"]` + Chinese: `["組件開發"]`
+- **Project Isolation:** Use `project_scope` for exact match filtering
+- **Performance Optimized:** Search workflows first, then load scratchpads for scoring
+
+```typescript
+// Basic workflow search
+const results = await callTool('search-workflows', {
+  query: 'authentication system'
+});
+
+// Project-scoped search
+const projectResults = await callTool('search-workflows', {
+  query: 'user login',
+  project_scope: 'myapp'
+});
+
+// Mixed language with pagination
+const mixedResults = await callTool('search-workflows', {
+  query: 'React組件開發',
+  page: 2,
+  limit: 10
+});
+```
+
 #### `search-scratchpads`
 
 Full-text search with automatic Chinese tokenization and graceful fallbacks. Supports context-aware search similar to grep -A -B -C.
@@ -924,6 +965,37 @@ cp ~/Dropbox/scratchpad/scratchpad.v6.db ./scratchpad.v6.db
 ```
 
 ### Database Management Tools
+
+#### Database Migration (`migrate-workflows-fts.cjs`)
+
+**🆕 NEW:** Migrate existing databases to support the new `search-workflows` tool with weighted scoring.
+
+**Automatic Migration (Recommended):**
+- Migration happens automatically when starting the MCP server
+- Existing databases are upgraded from v3 → v4 seamlessly  
+- No downtime or data loss
+
+**Manual Migration:**
+```bash
+# Migrate default database
+node scripts/migrate-workflows-fts.cjs
+
+# Migrate specific database  
+node scripts/migrate-workflows-fts.cjs /path/to/your/database.db
+```
+
+**What's Added:**
+- ✅ `workflows_fts` virtual table for full-text search
+- ✅ Automatic FTS5 triggers for data synchronization
+- ✅ `search-workflows` tool with 5/3/3/1 weighted scoring
+- ✅ Mixed English/Chinese language support
+- ✅ Project scope filtering and smart pagination
+
+**Safety Features:**
+- 🔒 Automatic backup before migration (`.backup.timestamp`)
+- 🔄 FTS5 graceful fallback to LIKE search if unsupported
+- ✅ Data integrity verification after migration
+- 🛡️ Rollback support via backup files
 
 #### WAL Checkpoint (`checkpoint-database.cjs`)
 

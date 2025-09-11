@@ -20,6 +20,7 @@ import {
   listScratchpadsTool,
   searchScratchpadsTool,
   searchScratchpadContentTool,
+  searchWorkflowsTool,
   extractWorkflowInfoTool,
 } from './tools/index.js';
 import {
@@ -34,6 +35,7 @@ import {
   validateListScratchpadsArgs,
   validateSearchScratchpadsArgs,
   validateSearchScratchpadContentArgs,
+  validateSearchWorkflowsArgs,
   validateUpdateWorkflowStatusArgs,
   validateListWorkflowsArgs,
   validateGetLatestActiveWorkflowArgs,
@@ -91,6 +93,7 @@ class ScratchpadMCPServer {
     // Search tools
     const searchScratchpads = searchScratchpadsTool(this.db);
     const searchScratchpadContent = searchScratchpadContentTool(this.db);
+    const searchWorkflows = searchWorkflowsTool(this.db);
 
     // GPT-5 extraction tools
     const extractWorkflowInfo = extractWorkflowInfoTool(this.db);
@@ -182,6 +185,12 @@ class ScratchpadMCPServer {
           case 'search-scratchpad-content': {
             const validatedArgs = validateSearchScratchpadContentArgs(args);
             const result = await searchScratchpadContent(validatedArgs);
+            return createToolResponse(result);
+          }
+
+          case 'search-workflows': {
+            const validatedArgs = validateSearchWorkflowsArgs(args);
+            const result = await searchWorkflows(validatedArgs);
             return createToolResponse(result);
           }
 
@@ -777,6 +786,40 @@ class ScratchpadMCPServer {
                 },
               },
               required: ['id'],
+            },
+          },
+          {
+            name: 'search-workflows',
+            description:
+              'Search workflows with weighted scoring based on scratchpads content. Uses the "search workflows first, then load scratchpads" strategy with 5/3/3/1 weighted scoring (workflows.name/description, scratchpads.title/content). Supports mixed English/Chinese queries with automatic language separation and 4-tier fallback (FTS5 → LIKE).\n\nFEATURES:\n• Weighted scoring: workflows.name (5pts), workflows.description (3pts), scratchpads.title (3pts), scratchpads.content (1pt)\n• Mixed language support: "React組件" → English: ["React"] + Chinese: ["組件"]\n• Project isolation: project_scope parameter for exact match filtering\n• Smart pagination: 5 items per page (default: page 1)\n• Comprehensive search: workflows + ALL scratchpads content under those workflows\n• Performance optimized: search workflows first, then load scratchpads for scoring\n\nUSAGE EXAMPLES:\n• Basic search: {"query": "authentication"}\n• Project-scoped: {"query": "user login", "project_scope": "myapp"}\n• Pagination: {"query": "React", "page": 2, "limit": 10}\n• Mixed language: {"query": "React組件開發", "useJieba": true}\n• English-only: {"query": "database connection pool"}',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                query: {
+                  type: 'string',
+                  description: 'Search query string (supports mixed English/Chinese)',
+                },
+                project_scope: {
+                  type: 'string',
+                  description: 'Optional project scope for exact match filtering (isolates workflows by project)',
+                },
+                page: {
+                  type: 'number',
+                  description: 'Page number for pagination (default: 1)',
+                  minimum: 1,
+                },
+                limit: {
+                  type: 'number',
+                  description: 'Items per page (default: 5, max: 20)',
+                  minimum: 1,
+                  maximum: 20,
+                },
+                useJieba: {
+                  type: 'boolean',
+                  description: 'Force jieba Chinese tokenization (auto-detect by default)',
+                },
+              },
+              required: ['query'],
             },
           },
           {

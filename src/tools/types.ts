@@ -332,6 +332,41 @@ export interface SearchScratchpadsResult {
   message?: string;
 }
 
+export interface SearchWorkflowsArgs {
+  query: string;
+  project_scope?: string; // Optional project scope filter (exact match)
+  page?: number; // Page number for pagination (default: 1)
+  limit?: number; // Items per page (default: 5, max: 20)
+  useJieba?: boolean; // Force jieba tokenization (auto-detect by default)
+}
+
+export interface SearchWorkflowsResult {
+  results: Array<{
+    workflow: {
+      id: string;
+      name: string;
+      description: string | null;
+      created_at: string; // ISO string
+      updated_at: string; // ISO string
+      scratchpad_count: number;
+      is_active: boolean;
+      project_scope: string | null;
+    };
+    score: number; // Weighted scoring from scratchpads content
+    matching_scratchpads: number; // Number of scratchpads with matches
+    rank: number; // FTS5 rank score
+  }>;
+  pagination: {
+    page: number;
+    per_page: number;
+    total_results: number;
+    has_more: boolean;
+  };
+  query: string;
+  search_method: 'fts5' | 'like';
+  message?: string;
+}
+
 // New tool types for is_active feature
 export interface GetLatestActiveWorkflowArgs {
   project_scope: string;

@@ -8,6 +8,8 @@ import type {
   SearchScratchpadsResult,
   SearchScratchpadContentArgs,
   SearchScratchpadContentResult,
+  SearchWorkflowsArgs,
+  SearchWorkflowsResult,
 } from './types.js';
 
 /**
@@ -83,6 +85,101 @@ const formatScratchpad = (
   }
 
   return formatted;
+};
+
+/**
+ * Split query into English and Chinese keywords
+ * 簡化策略：只拆分英文和中文，不進行深度分詞
+ */
+export const splitLanguageKeywords = (
+  query: string
+): { english: string[]; chinese: string[] } => {
+  // 提取英文詞彙 (連續的字母、數字、連字符、底線)
+  const englishMatches = query.match(/[a-zA-Z0-9_-]+/g) || [];
+  
+  // 移除英文詞彙後剩餘的部分作為中文
+  let chineseText = query;
+  englishMatches.forEach((englishWord) => {
+    chineseText = chineseText.replace(new RegExp(englishWord, 'g'), ' ');
+  });
+  
+  // 清理中文文本：移除多餘空白和特殊符號，保留中文字符
+  chineseText = chineseText
+    .replace(/\s+/g, ' ')
+    .replace(/[^\u4e00-\u9fa5\s]/g, '')
+    .trim();
+  
+  // 將中文文本按空格分割（如果有的話），否則作為整體
+  const chineseWords = chineseText
+    ? chineseText.split(/\s+/).filter((word) => word.length > 0)
+    : [];
+  
+  return {
+    english: englishMatches.filter((word) => word.length > 0),
+    chinese: chineseWords,
+  };
+};
+
+/**
+ * Calculate weighted score for a workflow based on keyword matches
+ * 權重分配: workflows.name(5分) + workflows.description(3分) + scratchpads.title(3分) + scratchpads.content(1分)
+ */
+export const calculateWorkflowScore = (
+  workflow: {
+    name: string;
+    description: string | null;
+  },
+  scratchpads: Array<{
+    title: string;
+    content: string;
+  }>,
+  keywords: string[]
+): number => {
+  let score = 0;
+
+  // 大小寫不敏感的匹配函數
+  const countMatches = (text: string, keyword: string): number => {
+    if (!text || !keyword) return 0;
+    const lowerText = text.toLowerCase();
+    const lowerKeyword = keyword.toLowerCase();
+    
+    // 計算關鍵詞在文本中出現的次數
+    let count = 0;
+    let position = 0;
+    
+    while ((position = lowerText.indexOf(lowerKeyword, position)) !== -1) {
+      count++;
+      position += lowerKeyword.length;
+    }
+    
+    return count;
+  };
+
+  // 遍歷所有關鍵詞
+  for (const keyword of keywords) {
+    // workflows.name: 5分/次
+    const nameMatches = countMatches(workflow.name, keyword);
+    score += nameMatches * 5;
+
+    // workflows.description: 3分/次
+    if (workflow.description) {
+      const descMatches = countMatches(workflow.description, keyword);
+      score += descMatches * 3;
+    }
+
+    // scratchpads 評分
+    for (const scratchpad of scratchpads) {
+      // scratchpads.title: 3分/次
+      const titleMatches = countMatches(scratchpad.title, keyword);
+      score += titleMatches * 3;
+
+      // scratchpads.content: 1分/次
+      const contentMatches = countMatches(scratchpad.content, keyword);
+      score += contentMatches * 1;
+    }
+  }
+
+  return score;
 };
 
 /**
@@ -550,5 +647,147 @@ export const searchScratchpadContentTool = (
       search_method: searchMethod,
       message: `Found ${matches.length} matches for ${searchMethod === 'string' ? `"${searchTerm}"` : `pattern /${searchTerm}/`} in scratchpad "${scratchpad.title}"`,
     };
+  };
+};
+
+/**
+ * Search workflows with weighted scoring based on scratchpads content
+ * 實作「先搜workflows再載入scratchpads的查詢策略」
+ */
+export const searchWorkflowsTool = (
+  db: ScratchpadDatabase
+): ToolHandler<SearchWorkflowsArgs, SearchWorkflowsResult> => {
+  return async (args: SearchWorkflowsArgs): Promise<SearchWorkflowsResult> => {
+    try {
+      // 參數驗證和預設值設定
+      const page = Math.max(1, args.page ?? 1);
+      const limit = Math.min(args.limit ?? 5, 20);
+      const offset = (page - 1) * limit;
+      
+      // 步驟 1: 分離英文和中文關鍵詞
+      const { english, chinese } = splitLanguageKeywords(args.query);
+      const allKeywords = [...english, ...chinese];
+      
+      if (allKeywords.length === 0) {
+        return {
+          results: [],
+          pagination: {
+            page,
+            per_page: limit,
+            total_results: 0,
+            has_more: false,
+          },
+          query: args.query,
+          search_method: 'fts5',
+          message: `No valid keywords found in query: "${args.query}"`,
+        };
+      }
+
+      // 步驟 2: 執行 workflows 搜尋（使用資料庫的四層降級機制）
+      const searchParams: {
+        query: string;
+        project_scope?: string;
+        limit?: number;
+      } = {
+        query: args.query,
+        limit: 100, // 先取較多結果，之後重新評分和分頁
+      };
+      
+      if (args.project_scope) {
+        searchParams.project_scope = args.project_scope;
+      }
+      
+      const workflowSearchResults = db.searchWorkflows(searchParams);
+
+      // 提取搜尋方法
+      const stats = db.getStats();
+      const searchMethod = stats.hasFTS5 ? 'fts5' : 'like';
+
+      // 步驟 3: 對每個 workflow 載入 scratchpads 並計算權重分數
+      const scoredResults = workflowSearchResults.map((workflow) => {
+        // 載入該 workflow 的所有 scratchpads
+        const scratchpads = db.listScratchpads({
+          workflow_id: workflow.id,
+          limit: 100, // 獲取所有 scratchpads 用於評分
+        });
+        
+        // 計算權重分數
+        const score = calculateWorkflowScore(
+          {
+            name: workflow.name,
+            description: workflow.description,
+          },
+          scratchpads.map((sp) => ({
+            title: sp.title,
+            content: sp.content,
+          })),
+          allKeywords
+        );
+
+        return {
+          workflow: {
+            id: workflow.id,
+            name: workflow.name,
+            description: workflow.description,
+            created_at: formatTimestamp(workflow.created_at),
+            updated_at: formatTimestamp(workflow.updated_at),
+            scratchpad_count: workflow.scratchpad_count,
+            is_active: workflow.is_active,
+            project_scope: workflow.project_scope,
+          },
+          score,
+          matching_scratchpads: scratchpads.length,
+          rank: workflow.rank,
+        };
+      });
+
+      // 步驟 4: 按分數排序（高分在前），分數相同時按 rank 排序
+      scoredResults.sort((a, b) => {
+        if (b.score !== a.score) {
+          return b.score - a.score; // 分數高的在前
+        }
+        return a.rank - b.rank; // 分數相同時 rank 小的在前（更相關）
+      });
+
+      // 步驟 5: 分頁處理
+      const totalResults = scoredResults.length;
+      const paginatedResults = scoredResults.slice(offset, offset + limit);
+      const hasMore = offset + limit < totalResults;
+
+      // 生成回應訊息
+      let message = `Found ${totalResults} workflows for "${args.query}" using ${searchMethod}`;
+      if (args.project_scope) {
+        message += ` (project: ${args.project_scope})`;
+      }
+      if (totalResults > limit) {
+        message += ` - Showing page ${page} of ${Math.ceil(totalResults / limit)}`;
+      }
+
+      // 加入關鍵詞分析資訊
+      if (english.length > 0 && chinese.length > 0) {
+        message += ` - Mixed language search: English(${english.join(', ')}) + Chinese(${chinese.join(', ')})`;
+      } else if (chinese.length > 0) {
+        message += ` - Chinese search: ${chinese.join(', ')}`;
+      } else {
+        message += ` - English search: ${english.join(', ')}`;
+      }
+
+      return {
+        results: paginatedResults,
+        pagination: {
+          page,
+          per_page: limit,
+          total_results: totalResults,
+          has_more: hasMore,
+        },
+        query: args.query,
+        search_method: searchMethod,
+        message,
+      };
+    } catch (error) {
+      throw new Error(
+        `Failed to search workflows: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    }
   };
 };

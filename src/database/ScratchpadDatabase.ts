@@ -253,6 +253,49 @@ export class ScratchpadDatabase {
       ORDER BY s.updated_at DESC
       LIMIT ?
     `);
+
+    // Workflows search statements
+    if (this.hasFTS5) {
+      if (this.hasSimpleTokenizer) {
+        this.searchWorkflowsFTS = this.db.prepare(`
+          SELECT 
+            w.id, w.name, w.description, w.created_at, w.updated_at, 
+            w.scratchpad_count, w.is_active, w.project_scope,
+            fts.rank
+          FROM workflows_fts fts
+          JOIN workflows w ON w.rowid = fts.rowid
+          WHERE workflows_fts MATCH simple_query(?)
+          AND (? IS NULL OR w.project_scope = ?)
+          ORDER BY fts.rank
+          LIMIT ?
+        `);
+      } else {
+        this.searchWorkflowsFTS = this.db.prepare(`
+          SELECT 
+            w.id, w.name, w.description, w.created_at, w.updated_at, 
+            w.scratchpad_count, w.is_active, w.project_scope,
+            fts.rank
+          FROM workflows_fts fts
+          JOIN workflows w ON w.rowid = fts.rowid
+          WHERE workflows_fts MATCH ?
+          AND (? IS NULL OR w.project_scope = ?)
+          ORDER BY fts.rank
+          LIMIT ?
+        `);
+      }
+    }
+
+    this.searchWorkflowsLike = this.db.prepare(`
+      SELECT 
+        w.id, w.name, w.description, w.created_at, w.updated_at, 
+        w.scratchpad_count, w.is_active, w.project_scope,
+        1.0 as rank
+      FROM workflows w
+      WHERE (w.name LIKE ? OR COALESCE(w.description, '') LIKE ?)
+      AND (? IS NULL OR w.project_scope = ?)
+      ORDER BY w.updated_at DESC
+      LIMIT ?
+    `);
   }
 
   // Note: sanitizeFTS5Query was removed as it's not used - buildFTS5Query handles escaping
@@ -415,6 +458,8 @@ export class ScratchpadDatabase {
   private searchScratchpadsLike!: Database.Statement<
     [string, string, string | null, string | null, number]
   >;
+  private searchWorkflowsFTS?: Database.Statement<[string, string | null, string | null, number]>;
+  private searchWorkflowsLike!: Database.Statement<[string, string, string | null, number]>;
 
   /**
    * Create a new workflow
@@ -958,6 +1003,222 @@ export class ScratchpadDatabase {
       },
       rank: row.rank,
     }));
+  }
+
+  /**
+   * Search workflows using FTS5 or LIKE fallback
+   */
+  searchWorkflows(params: {
+    query: string;
+    project_scope?: string;
+    limit?: number;
+  }): Array<{
+    id: string;
+    name: string;
+    description: string | null;
+    created_at: number;
+    updated_at: number;
+    scratchpad_count: number;
+    is_active: boolean;
+    project_scope: string | null;
+    rank: number;
+  }> {
+    const limit = Math.min(params.limit ?? 20, 50);
+
+    // 檢查 FTS5 健康狀態並嘗試使用 FTS5 搜尋
+    if (this.checkFTS5Health()) {
+      try {
+        let results: Array<{
+          id: string;
+          name: string;
+          description: string | null;
+          created_at: number;
+          updated_at: number;
+          scratchpad_count: number;
+          is_active: number;
+          project_scope: string | null;
+          rank: number;
+        }>;
+
+        // 智慧模式選擇：自動偵測中文內容並選擇最佳搜尋方式
+        const hasChinese = /[\u4e00-\u9fa5]/.test(params.query);
+        const shouldUseJieba = hasChinese && this.hasJiebaTokenizer;
+
+        if (shouldUseJieba && this.hasJiebaTokenizer) {
+          // 使用 jieba_query() 結巴分詞搜尋
+          try {
+            results = this.searchWorkflowsWithJieba(params.query, params.project_scope, limit);
+          } catch (jiebaError) {
+            console.warn('⚠️ Jieba workflows 搜尋失敗，降級到 simple_query:', jiebaError);
+            // 降級到 simple_query
+            if (this.searchWorkflowsFTS) {
+              results = this.searchWorkflowsFTS.all(
+                params.query,
+                params.project_scope ?? null,
+                params.project_scope ?? null,
+                limit
+              ) as Array<{
+                id: string;
+                name: string;
+                description: string | null;
+                created_at: number;
+                updated_at: number;
+                scratchpad_count: number;
+                is_active: number;
+                project_scope: string | null;
+                rank: number;
+              }>;
+            } else {
+              throw new Error('No workflows FTS search method available');
+            }
+          }
+        } else if (this.hasSimpleTokenizer && this.searchWorkflowsFTS) {
+          // 使用 simple_query() 函數
+          results = this.searchWorkflowsFTS.all(
+            params.query,
+            params.project_scope ?? null,
+            params.project_scope ?? null,
+            limit
+          ) as Array<{
+            id: string;
+            name: string;
+            description: string | null;
+            created_at: number;
+            updated_at: number;
+            scratchpad_count: number;
+            is_active: number;
+            project_scope: string | null;
+            rank: number;
+          }>;
+        } else if (this.searchWorkflowsFTS) {
+          // 使用標準 FTS5 查詢
+          const safeQuery = this.buildWorkflowsFTS5Query(params.query);
+          results = this.searchWorkflowsFTS.all(
+            safeQuery,
+            params.project_scope ?? null,
+            params.project_scope ?? null,
+            limit
+          ) as Array<{
+            id: string;
+            name: string;
+            description: string | null;
+            created_at: number;
+            updated_at: number;
+            scratchpad_count: number;
+            is_active: number;
+            project_scope: string | null;
+            rank: number;
+          }>;
+        } else {
+          throw new Error('No FTS workflows search method available');
+        }
+
+        return results.map((row) => ({
+          id: row.id,
+          name: row.name,
+          description: row.description,
+          created_at: row.created_at,
+          updated_at: row.updated_at,
+          scratchpad_count: row.scratchpad_count,
+          is_active: Boolean(row.is_active),
+          project_scope: row.project_scope,
+          rank: row.rank,
+        }));
+      } catch (error) {
+        console.warn('FTS5 workflows 搜尋失敗，降級到 LIKE 搜尋:', error);
+        this.hasFTS5 = false;
+      }
+    }
+
+    // Fallback to LIKE search
+    const searchPattern = `%${params.query}%`;
+    const results = this.searchWorkflowsLike.all(
+      searchPattern,
+      searchPattern,
+      params.project_scope ?? null,
+      limit
+    ) as Array<{
+      id: string;
+      name: string;
+      description: string | null;
+      created_at: number;
+      updated_at: number;
+      scratchpad_count: number;
+      is_active: number;
+      project_scope: string | null;
+      rank: number;
+    }>;
+
+    return results.map((row) => ({
+      id: row.id,
+      name: row.name,
+      description: row.description,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      scratchpad_count: row.scratchpad_count,
+      is_active: Boolean(row.is_active),
+      project_scope: row.project_scope,
+      rank: row.rank,
+    }));
+  }
+
+  /**
+   * 使用 jieba_query() 進行 workflows 結巴分詞搜尋
+   */
+  private searchWorkflowsWithJieba(
+    query: string,
+    projectScope?: string,
+    limit: number = 20
+  ): Array<{
+    id: string;
+    name: string;
+    description: string | null;
+    created_at: number;
+    updated_at: number;
+    scratchpad_count: number;
+    is_active: number;
+    project_scope: string | null;
+    rank: number;
+  }> {
+    const sql = `
+      SELECT 
+        w.id, w.name, w.description, w.created_at, w.updated_at, 
+        w.scratchpad_count, w.is_active, w.project_scope,
+        fts.rank
+      FROM workflows_fts fts
+      JOIN workflows w ON w.rowid = fts.rowid
+      WHERE workflows_fts MATCH jieba_query(?)
+      AND (? IS NULL OR w.project_scope = ?)
+      ORDER BY fts.rank
+      LIMIT ?
+    `;
+
+    const stmt = this.db.prepare(sql);
+    return stmt.all(query, projectScope, projectScope, limit) as Array<{
+      id: string;
+      name: string;
+      description: string | null;
+      created_at: number;
+      updated_at: number;
+      scratchpad_count: number;
+      is_active: number;
+      project_scope: string | null;
+      rank: number;
+    }>;
+  }
+
+  /**
+   * 構建安全的 workflows FTS5 搜尋查詢
+   */
+  private buildWorkflowsFTS5Query(query: string): string {
+    // 如果有 simple 擴展，直接返回查詢
+    if (this.hasSimpleTokenizer) {
+      return query;
+    }
+
+    // 降級到基本 FTS5 查詢
+    const escaped = query.replace(/"/g, '""');
+    return `name:"${escaped}" OR description:"${escaped}"`;
   }
 
   /**

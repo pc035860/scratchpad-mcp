@@ -13,6 +13,7 @@ import type {
   ListScratchpadsArgs,
   SearchScratchpadsArgs,
   SearchScratchpadContentArgs,
+  SearchWorkflowsArgs,
   UpdateWorkflowStatusArgs,
   ListWorkflowsArgs,
   GetLatestActiveWorkflowArgs,
@@ -1044,6 +1045,55 @@ export function validateSearchScratchpadContentArgs(args: unknown): SearchScratc
       throw new Error('Invalid arguments: show_line_numbers must be a boolean');
     }
     result.show_line_numbers = obj['show_line_numbers'];
+  }
+
+  return result;
+}
+
+export function validateSearchWorkflowsArgs(args: unknown): SearchWorkflowsArgs {
+  if (!args || typeof args !== 'object') {
+    throw new Error('Invalid arguments: expected object');
+  }
+
+  const obj = args as Record<string, unknown>;
+
+  if (typeof obj['query'] !== 'string') {
+    throw new Error('Invalid arguments: query must be a string');
+  }
+
+  const result: SearchWorkflowsArgs = {
+    query: obj['query'],
+  };
+
+  // Optional project_scope parameter (exact match filter)
+  if (obj['project_scope'] !== undefined) {
+    if (typeof obj['project_scope'] !== 'string') {
+      throw new Error('Invalid arguments: project_scope must be a string');
+    }
+    result.project_scope = obj['project_scope'];
+  }
+
+  // Optional pagination parameters
+  if (obj['page'] !== undefined) {
+    if (typeof obj['page'] !== 'number' || !Number.isInteger(obj['page']) || obj['page'] < 1) {
+      throw new Error('Invalid arguments: page must be a positive integer');
+    }
+    result.page = obj['page'];
+  }
+
+  if (obj['limit'] !== undefined) {
+    if (typeof obj['limit'] !== 'number' || !Number.isInteger(obj['limit']) || obj['limit'] < 1 || obj['limit'] > 20) {
+      throw new Error('Invalid arguments: limit must be an integer between 1 and 20');
+    }
+    result.limit = obj['limit'];
+  }
+
+  // Optional Chinese tokenization parameter
+  if (obj['useJieba'] !== undefined) {
+    if (typeof obj['useJieba'] !== 'boolean') {
+      throw new Error('Invalid arguments: useJieba must be a boolean');
+    }
+    result.useJieba = obj['useJieba'];
   }
 
   return result;
