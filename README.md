@@ -30,6 +30,12 @@ const scratchpad = await mcp.callTool('create-scratchpad', {
   content: 'Initial transformer research findings...',
 });
 
+// Retrieve a workflow with optional scratchpad summaries
+const workflowDetails = await mcp.callTool('get-workflow', {
+  workflow_id: workflow.id,
+  include_scratchpads_summary: true,
+});
+
 // Multi-mode editing example
 await mcp.callTool('update-scratchpad', {
   id: scratchpad.id,
@@ -136,6 +142,7 @@ export SCRATCHPAD_DISABLED_TOOLS="get-scratchpad,get-scratchpad-outline"
 - `create-workflow` - Create workflow containers
 - `list-workflows` - List all workflows
 - `get-latest-active-workflow` - Get the most recently updated active workflow
+- `get-workflow` - Retrieve a workflow by ID with optional scratchpads summary
 - `update-workflow-status` - Activate/deactivate a workflow
 - `create-scratchpad` - Create a scratchpad within a workflow
 - `get-scratchpad` - Retrieve a scratchpad by ID with optional line range and context selection
@@ -388,6 +395,22 @@ List all workflows.
   project_scope?: string; // optional
 }
 ```
+
+#### `get-workflow`
+
+Retrieve a workflow by ID with optional scratchpads summary.
+
+```typescript
+{
+  workflow_id: string;                 // required - workflow identifier
+  include_scratchpads_summary?: boolean; // optional - include scratchpad summaries (default: true)
+}
+```
+
+**Response highlights:**
+- Returns `workflow` object with metadata (`id`, `name`, `description`, timestamps, `scratchpad_count`, `project_scope`, `is_active`)
+- Includes `scratchpads_summary` when `include_scratchpads_summary` is omitted or `true`
+- Provides friendly `message` indicating whether the workflow was found
 
 #### `get-latest-active-workflow`
 

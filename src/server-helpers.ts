@@ -17,6 +17,7 @@ import type {
   UpdateWorkflowStatusArgs,
   ListWorkflowsArgs,
   GetLatestActiveWorkflowArgs,
+  GetWorkflowArgs,
   ExtractWorkflowInfoArgs,
 } from './tools/index.js';
 
@@ -620,6 +621,32 @@ export function validateGetLatestActiveWorkflowArgs(args: unknown): GetLatestAct
   const result: GetLatestActiveWorkflowArgs = {
     project_scope: obj['project_scope'],
   };
+
+  return result;
+}
+
+export function validateGetWorkflowArgs(args: unknown): GetWorkflowArgs {
+  if (!args || typeof args !== 'object') {
+    throw new Error('Invalid arguments: expected object');
+  }
+
+  const obj = args as Record<string, unknown>;
+
+  if (typeof obj['workflow_id'] !== 'string') {
+    throw new Error('Invalid arguments: workflow_id must be a string');
+  }
+
+  if (obj['include_scratchpads_summary'] !== undefined && typeof obj['include_scratchpads_summary'] !== 'boolean') {
+    throw new Error('Invalid arguments: include_scratchpads_summary must be a boolean');
+  }
+
+  const result: GetWorkflowArgs = {
+    workflow_id: obj['workflow_id'],
+  };
+
+  if (obj['include_scratchpads_summary'] !== undefined) {
+    result.include_scratchpads_summary = obj['include_scratchpads_summary'] as boolean;
+  }
 
   return result;
 }

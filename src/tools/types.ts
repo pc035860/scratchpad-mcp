@@ -388,6 +388,27 @@ export interface GetLatestActiveWorkflowResult {
   message: string;
 }
 
+export interface GetWorkflowArgs {
+  workflow_id: string;
+  include_scratchpads_summary?: boolean;
+}
+
+export interface GetWorkflowResult {
+  workflow: {
+    id: string;
+    name: string;
+    description: string | null;
+    created_at: string; // ISO string
+    updated_at: string; // ISO string
+    scratchpad_count: number;
+    is_active: boolean;
+    project_scope: string | null;
+    /** Enhanced Workflow: Summary of scratchpads in this workflow */
+    scratchpads_summary?: ScratchpadSummary[];
+  } | null;
+  message: string;
+}
+
 export interface UpdateWorkflowStatusArgs {
   workflow_id: string;
   is_active: boolean;

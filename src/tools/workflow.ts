@@ -10,6 +10,8 @@ import type {
   ListWorkflowsResult,
   GetLatestActiveWorkflowArgs,
   GetLatestActiveWorkflowResult,
+  GetWorkflowArgs,
+  GetWorkflowResult,
   UpdateWorkflowStatusArgs,
   UpdateWorkflowStatusResult,
 } from './types.js';
@@ -169,6 +171,46 @@ export const getLatestActiveWorkflowTool = (
     } catch (error) {
       throw new Error(
         `Failed to get latest active workflow: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    }
+  };
+};
+
+/**
+ * Get workflow by ID
+ */
+export const getWorkflowTool = (
+  db: ScratchpadDatabase
+): ToolHandler<GetWorkflowArgs, GetWorkflowResult> => {
+  return async (args: GetWorkflowArgs): Promise<GetWorkflowResult> => {
+    try {
+      // Validate required parameters
+      if (!args.workflow_id || typeof args.workflow_id !== 'string') {
+        throw new Error('workflow_id is required and must be a string');
+      }
+
+      // Validate optional parameters
+      if (args.include_scratchpads_summary !== undefined && typeof args.include_scratchpads_summary !== 'boolean') {
+        throw new Error('include_scratchpads_summary must be a boolean');
+      }
+
+      const workflow = db.getWorkflowById(args.workflow_id);
+
+      if (workflow) {
+        const includeSummary = args.include_scratchpads_summary ?? true;
+        return {
+          workflow: formatWorkflow(workflow, db, includeSummary),
+          message: `Found workflow: "${workflow.name}" (${workflow.id})`,
+        };
+      } else {
+        return {
+          workflow: null,
+          message: `Workflow not found: ${args.workflow_id}`,
+        };
+      }
+    } catch (error) {
+      throw new Error(
+        `Failed to get workflow: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
     }
   };

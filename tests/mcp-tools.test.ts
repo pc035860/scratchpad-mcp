@@ -10,6 +10,7 @@ import {
   createWorkflowTool,
   listWorkflowsTool,
   getLatestActiveWorkflowTool,
+  getWorkflowTool,
   updateWorkflowStatusTool,
   createScratchpadTool,
   getScratchpadTool,
@@ -20,6 +21,7 @@ import {
   searchScratchpadsTool,
   type CreateWorkflowArgs,
   type GetLatestActiveWorkflowArgs,
+  type GetWorkflowArgs,
   type UpdateWorkflowStatusArgs,
   type CreateScratchpadArgs,
   type GetScratchpadArgs,
@@ -40,6 +42,7 @@ class MCPToolsTestHelper {
   private createWorkflow: ReturnType<typeof createWorkflowTool>;
   private listWorkflows: ReturnType<typeof listWorkflowsTool>;
   private getLatestActiveWorkflow: ReturnType<typeof getLatestActiveWorkflowTool>;
+  private getWorkflow: ReturnType<typeof getWorkflowTool>;
   private updateWorkflowStatus: ReturnType<typeof updateWorkflowStatusTool>;
   private createScratchpad: ReturnType<typeof createScratchpadTool>;
   private getScratchpad: ReturnType<typeof getScratchpadTool>;
@@ -56,6 +59,7 @@ class MCPToolsTestHelper {
     this.createWorkflow = createWorkflowTool(this.db);
     this.listWorkflows = listWorkflowsTool(this.db);
     this.getLatestActiveWorkflow = getLatestActiveWorkflowTool(this.db);
+    this.getWorkflow = getWorkflowTool(this.db);
     this.updateWorkflowStatus = updateWorkflowStatusTool(this.db);
     this.createScratchpad = createScratchpadTool(this.db);
     this.getScratchpad = getScratchpadTool(this.db);
@@ -86,6 +90,14 @@ class MCPToolsTestHelper {
   async callGetLatestActiveWorkflow(args: GetLatestActiveWorkflowArgs) {
     try {
       return await this.getLatestActiveWorkflow(args);
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  }
+
+  async callGetWorkflow(args: GetWorkflowArgs) {
+    try {
+      return await this.getWorkflow(args);
     } catch (error) {
       return { error: error instanceof Error ? error.message : 'Unknown error' };
     }
@@ -253,6 +265,110 @@ describe('MCP Tools Integration Tests', () => {
           expect(workflow).toHaveProperty('updated_at');
           expect(workflow).toHaveProperty('scratchpad_count');
         }
+      });
+    });
+    describe('get-workflow tool', () => {
+      it('should retrieve workflow with valid ID', async () => {
+        // Create a test workflow first
+        const createResult = await helper.callCreateWorkflow({
+          name: 'Test Workflow for Get',
+          description: 'A workflow for testing get functionality',
+        });
+        expect(createResult).not.toHaveProperty('error');
+        const workflowId = createResult.workflow.id;
+
+        // Test getting the workflow
+        const result = await helper.callGetWorkflow({
+          workflow_id: workflowId,
+        });
+        expect(result).not.toHaveProperty('error');
+        expect(result).toHaveProperty('workflow');
+        expect(result).toHaveProperty('message');
+        expect(result.workflow).not.toBeNull();
+        expect(result.workflow.id).toBe(workflowId);
+        expect(result.workflow.name).toBe('Test Workflow for Get');
+        expect(result.workflow.description).toBe('A workflow for testing get functionality');
+        expect(result.workflow).toHaveProperty('created_at');
+        expect(result.workflow).toHaveProperty('updated_at');
+        expect(result.workflow).toHaveProperty('scratchpad_count');
+        expect(result.workflow).toHaveProperty('is_active');
+        expect(result.message).toContain('Found workflow');
+      });
+
+      it('should return null for non-existent workflow ID', async () => {
+        const result = await helper.callGetWorkflow({
+          workflow_id: 'non-existent-workflow-id',
+        });
+        expect(result).not.toHaveProperty('error');
+        expect(result).toHaveProperty('workflow');
+        expect(result).toHaveProperty('message');
+        expect(result.workflow).toBeNull();
+        expect(result.message).toContain('Workflow not found');
+      });
+
+      it('should handle missing workflow_id parameter', async () => {
+        const result = await helper.callGetWorkflow({} as GetWorkflowArgs);
+        expect(result).toHaveProperty('error');
+        expect(result.error).toContain('workflow_id');
+      });
+
+      it('should handle invalid workflow_id type', async () => {
+        const result = await helper.callGetWorkflow({
+          workflow_id: null as any,
+        });
+        expect(result).toHaveProperty('error');
+        expect(result.error).toContain('workflow_id');
+      });
+
+      it('should include scratchpads_summary by default', async () => {
+        // Create workflow and scratchpad for testing
+        const workflowResult = await helper.callCreateWorkflow({
+          name: 'Workflow with Scratchpads',
+        });
+        expect(workflowResult).not.toHaveProperty('error');
+        const workflowId = workflowResult.workflow.id;
+
+        await helper.callCreateScratchpad({
+          workflow_id: workflowId,
+          title: 'Test Scratchpad',
+          content: 'Test content',
+        });
+
+        // Test default behavior (should include summary)
+        const result = await helper.callGetWorkflow({
+          workflow_id: workflowId,
+        });
+        expect(result).not.toHaveProperty('error');
+        expect(result.workflow).not.toBeNull();
+        expect(result.workflow).toHaveProperty('scratchpads_summary');
+        expect(Array.isArray(result.workflow.scratchpads_summary)).toBe(true);
+      });
+
+      it('should exclude scratchpads_summary when explicitly set to false', async () => {
+        // Create a test workflow
+        const workflowResult = await helper.callCreateWorkflow({
+          name: 'Workflow without Summary',
+        });
+        expect(workflowResult).not.toHaveProperty('error');
+        const workflowId = workflowResult.workflow.id;
+
+        // Test with include_scratchpads_summary: false
+        const result = await helper.callGetWorkflow({
+          workflow_id: workflowId,
+          include_scratchpads_summary: false,
+        });
+        expect(result).not.toHaveProperty('error');
+        expect(result.workflow).not.toBeNull();
+        expect(result.workflow).not.toHaveProperty('scratchpads_summary');
+      });
+
+      it('should handle invalid include_scratchpads_summary type', async () => {
+        const result = await helper.callGetWorkflow({
+          workflow_id: 'any-id',
+          include_scratchpads_summary: 'invalid' as any,
+        });
+        expect(result).toHaveProperty('error');
+        expect(result.error).toContain('include_scratchpads_summary');
       });
     });
   });

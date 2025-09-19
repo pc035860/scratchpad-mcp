@@ -9,6 +9,7 @@ import {
   createWorkflowTool,
   listWorkflowsTool,
   getLatestActiveWorkflowTool,
+  getWorkflowTool,
   updateWorkflowStatusTool,
   createScratchpadTool,
   getScratchpadTool,
@@ -129,6 +130,23 @@ class ScratchpadMCPServer {
         return createToolResponse(result);
       } catch (error) {
         return handleToolError(error, 'get-latest-active-workflow');
+      }
+    });
+
+    this.server.registerTool('get-workflow', {
+      title: 'Get Workflow',
+      description: 'Retrieve a workflow by its ID with optional scratchpads summary',
+      inputSchema: {
+        workflow_id: z.string().describe('ID of the workflow to retrieve'),
+        include_scratchpads_summary: z.boolean().optional().describe('Whether to include scratchpads summary (default: true)'),
+      }
+    }, async ({ workflow_id, include_scratchpads_summary }) => {
+      try {
+        const getWorkflowFn = getWorkflowTool(this.db);
+        const result = await getWorkflowFn(filterUndefined({ workflow_id, include_scratchpads_summary }) as any);
+        return createToolResponse(result);
+      } catch (error) {
+        return handleToolError(error, 'get-workflow');
       }
     });
 
