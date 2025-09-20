@@ -158,6 +158,42 @@ describe('Tail-Scratchpad Block Operations Tests', () => {
         tail_size: { blocks: 'invalid' as any }
       })).toThrow('tail_size.blocks must be a positive integer');
     });
+
+    it('should reject empty tail_size object', () => {
+      expect(() => validateTailScratchpadArgs({
+        id: 'test-id',
+        tail_size: {}
+      })).toThrow('tail_size must specify exactly one of lines, chars, or blocks');
+    });
+
+    it('should reject tail_size with all undefined values', () => {
+      expect(() => validateTailScratchpadArgs({
+        id: 'test-id',
+        tail_size: { lines: undefined, chars: undefined, blocks: undefined }
+      })).toThrow('tail_size must specify exactly one of lines, chars, or blocks');
+    });
+
+    it('should reject multiple properties specified in tail_size', () => {
+      expect(() => validateTailScratchpadArgs({
+        id: 'test-id',
+        tail_size: { lines: 50, chars: 200 }
+      })).toThrow('tail_size must specify either lines OR chars OR blocks, not multiple');
+
+      expect(() => validateTailScratchpadArgs({
+        id: 'test-id',
+        tail_size: { lines: 50, blocks: 2 }
+      })).toThrow('tail_size must specify either lines OR chars OR blocks, not multiple');
+
+      expect(() => validateTailScratchpadArgs({
+        id: 'test-id',
+        tail_size: { chars: 200, blocks: 2 }
+      })).toThrow('tail_size must specify either lines OR chars OR blocks, not multiple');
+
+      expect(() => validateTailScratchpadArgs({
+        id: 'test-id',
+        tail_size: { lines: 50, chars: 200, blocks: 2 }
+      })).toThrow('tail_size must specify either lines OR chars OR blocks, not multiple');
+    });
   });
 
   describe('Block-Based Tail Extraction', () => {

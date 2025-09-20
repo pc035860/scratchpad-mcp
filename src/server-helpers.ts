@@ -689,6 +689,13 @@ export function validateTailScratchpadArgs(args: unknown): TailScratchpadArgs {
       );
     }
 
+    // If tail_size is provided, exactly one property must be specified
+    if (specifiedCount === 0) {
+      throw new Error(
+        'Invalid arguments: tail_size must specify exactly one of lines, chars, or blocks'
+      );
+    }
+
     if (hasLines) {
       if (
         typeof tailSize['lines'] !== 'number' ||

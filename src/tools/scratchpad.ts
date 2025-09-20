@@ -826,7 +826,7 @@ export const tailScratchpadTool = (
         extractionMethod = 'full content';
         isFullContent = true;
       } else if (args.tail_size) {
-        if ('chars' in args.tail_size) {
+        if (args.tail_size.chars !== undefined) {
           // Extract by character count
           const chars = args.tail_size.chars;
           const startIndex = Math.max(0, content.length - chars);
@@ -834,14 +834,14 @@ export const tailScratchpadTool = (
           tailChars = tailContent.length;
           tailLines = tailContent.split('\n').length;
           extractionMethod = `last ${chars} chars`;
-        } else if ('blocks' in args.tail_size) {
+        } else if (args.tail_size.blocks !== undefined) {
           // Extract by block count using BlockParser
           const blocks = args.tail_size.blocks;
           tailContent = BlockParser.getBlockRange(content, blocks, true); // fromEnd = true
           tailChars = tailContent.length;
           tailLines = tailContent.split('\n').length;
           extractionMethod = `last ${blocks} block(s)`;
-        } else {
+        } else if (args.tail_size.lines !== undefined) {
           // Extract by line count
           const lines = args.tail_size.lines;
           const contentLines = content.split('\n');
@@ -851,6 +851,16 @@ export const tailScratchpadTool = (
           tailLines = extractedLines.length;
           tailChars = tailContent.length;
           extractionMethod = `last ${lines} lines`;
+        } else {
+          // Fallback to default if no valid property found
+          const lines = 50;
+          const contentLines = content.split('\n');
+          const startIndex = Math.max(0, contentLines.length - lines);
+          const extractedLines = contentLines.slice(startIndex);
+          tailContent = extractedLines.join('\n');
+          tailLines = extractedLines.length;
+          tailChars = tailContent.length;
+          extractionMethod = 'last 50 lines (fallback)';
         }
       } else {
         // Default: 50 lines

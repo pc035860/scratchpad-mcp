@@ -431,14 +431,32 @@ export interface UpdateWorkflowStatusResult {
   previous_status: boolean;
 }
 
-// New tail-scratchpad tool types - SIMPLIFIED DESIGN
+// New tail-scratchpad tool types - TYPE-SAFE DESIGN
+// Helper types for compile-time single-choice guarantee
+type TailSizeLines = { lines: number; chars?: never; blocks?: never };
+type TailSizeChars = { chars: number; lines?: never; blocks?: never };
+type TailSizeBlocks = { blocks: number; lines?: never; chars?: never };
+
+// Public interface with discriminated union for type safety
 export interface TailScratchpadArgs {
   id: string;
   /** Tail size specification - choose either lines OR chars OR blocks, not multiple */
-  tail_size?: { lines: number } | { chars: number } | { blocks: number };
+  tail_size?: TailSizeLines | TailSizeChars | TailSizeBlocks;
   /** Whether to include content in response (default: true) */
   include_content?: boolean;
   /** Whether to return full content instead of tail (overrides tail_size) */
+  full_content?: boolean;
+}
+
+// Internal type for MCP schema compatibility (all optional)
+export interface TailScratchpadArgsInternal {
+  id: string;
+  tail_size?: {
+    lines?: number;
+    chars?: number;
+    blocks?: number;
+  };
+  include_content?: boolean;
   full_content?: boolean;
 }
 

@@ -26,6 +26,7 @@ import {
 import {
   handleToolError,
   createToolResponse,
+  validateTailScratchpadArgs,
 } from './server-helpers.js';
 
 // Helper function to filter undefined values from objects
@@ -268,24 +269,24 @@ class ScratchpadMCPServer {
       description: 'Get tail content from scratchpad (default: last 50 lines), or full content with full_content=true. Use include_content=false for metadata only.',
       inputSchema: {
         id: z.string().describe('ID of the scratchpad to get tail from'),
-        tail_size: z.union([
-          z.object({
-            lines: z.number().min(1).describe('Number of lines to return from the end'),
-          }),
-          z.object({
-            chars: z.number().min(1).describe('Number of characters to return from the end'),
-          }),
-          z.object({
-            blocks: z.number().min(1).describe('Number of blocks to return from the end'),
-          })
-        ]).optional().describe('Tail size specification - choose either lines OR chars OR blocks, not multiple'),
+        tail_size: z.object({
+          lines: z.number().min(1).optional().describe('Number of lines to return from the end'),
+          chars: z.number().min(1).optional().describe('Number of characters to return from the end'),
+          blocks: z.number().min(1).optional().describe('Number of blocks to return from the end')
+        }).refine(data => {
+          const fields = [data.lines, data.chars, data.blocks].filter(v => v !== undefined);
+          return fields.length === 1;
+        }, {
+          message: "Exactly one of lines, chars, or blocks must be specified"
+        }).optional().describe('Tail size specification - choose either lines OR chars OR blocks, not multiple'),
         include_content: z.boolean().optional().describe('Whether to include content in response (default: true)'),
         full_content: z.boolean().optional().describe('Whether to return full content instead of tail (overrides tail_size). Use this as alternative to get-scratchpad.'),
       }
     }, async ({ id, tail_size, include_content, full_content }) => {
       try {
         const tailScratchpadFn = tailScratchpadTool(this.db);
-        const result = await tailScratchpadFn(filterUndefined({ id, tail_size, include_content, full_content }) as any);
+        const validatedArgs = validateTailScratchpadArgs({ id, tail_size, include_content, full_content });
+        const result = await tailScratchpadFn(validatedArgs);
         return createToolResponse(result);
       } catch (error) {
         return handleToolError(error, 'tail-scratchpad');
