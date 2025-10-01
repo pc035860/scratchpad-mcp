@@ -92,6 +92,13 @@ export class ScratchpadDatabase {
     // WAL 模式特定優化
     this.db.pragma('wal_autocheckpoint = 1000'); // 每 1000 頁自動 checkpoint
 
+    // 確保 FTS5 觸發器在 WAL 模式下正常運作
+    // SQLite 3.31+ 的 trusted_schema 預設值因環境而異：
+    // - better-sqlite3 程式庫預設為 ON（向後相容）
+    // - sqlite3 命令列工具 3.42+ 預設為 OFF（安全考量）
+    // 本地 MCP 伺服器應用，schema 完全可信，明確設為 ON
+    this.db.pragma('trusted_schema = ON');
+
     // 啟動時執行更可靠的 checkpoint 策略
     try {
       this.db.pragma('wal_checkpoint(TRUNCATE)'); // 強制清空 WAL，確保啟動時一致性
@@ -666,7 +673,7 @@ export class ScratchpadDatabase {
     }
 
     // 使用簡化的事務處理，依賴 SQLite 原生 FTS5 觸發器
-    // 在 WAL 模式下，觸發器事務問題已在新版本 SQLite 中修復
+    // WAL 模式 + FTS5 觸發器需要 PRAGMA trusted_schema = ON（已在構造函數設定）
     const transaction = this.db.transaction(() => {
       this.updateScratchpad.run(newContent, newSizeBytes, params.id);
       this.updateWorkflowTimestamp.run(existing.workflow_id);
@@ -675,9 +682,13 @@ export class ScratchpadDatabase {
     try {
       transaction();
     } catch (error) {
-      // 如果發生 FTS5 相關錯誤，標記 FTS5 為不健康並降級到 LIKE 搜尋
+      // FTS5 觸發器理論上已透過 PRAGMA trusted_schema = ON 解決
+      // 若仍出錯，記錄警告並降級到 LIKE 搜尋後重試
       if (error instanceof Error && error.message.includes('fts')) {
-        console.warn('檢測到 FTS5 相關錯誤，將降級到 LIKE 搜尋:', error.message);
+        console.warn(
+          'FTS5 觸發器錯誤（已降級至 LIKE 搜尋）；請檢查 PRAGMA trusted_schema 設定:',
+          error.message
+        );
         this.hasFTS5 = false;
 
         // 重試事務（觸發器會自動跳過 FTS5 操作）
@@ -722,11 +733,15 @@ export class ScratchpadDatabase {
     try {
       transaction();
     } catch (error) {
-      // Handle FTS5 related errors similar to appendToScratchpad
+      // FTS5 觸發器理論上已透過 PRAGMA trusted_schema = ON 解決
+      // 若仍出錯，記錄警告並降級到 LIKE 搜尋後重試
       if (error instanceof Error && error.message.includes('fts')) {
-        console.warn('檢測到 FTS5 相關錯誤，將降級到 LIKE 搜尋:', error.message);
+        console.warn(
+          'FTS5 觸發器錯誤（已降級至 LIKE 搜尋）；請檢查 PRAGMA trusted_schema 設定:',
+          error.message
+        );
         this.hasFTS5 = false;
-        transaction(); // Retry transaction
+        transaction(); // Retry transaction without FTS5 hooks
       } else {
         throw error;
       }
