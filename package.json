@@ -17,7 +17,7 @@
     "lint:fix": "eslint src --ext .ts --fix",
     "format": "prettier --write \"src/**/*.ts\"",
     "clean": "rm -rf dist",
-    "serve": "node scripts/serve-workflow/server.js",
+    "serve": "node scripts/serve-workflow/server.js --port 3002",
     "serve:dev": "node scripts/serve-workflow/server.js --port 3001 --dev"
   },
   "keywords": [
