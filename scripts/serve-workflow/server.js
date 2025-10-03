@@ -68,7 +68,7 @@ const isDev = args.includes('--dev');
 const DB_PATH =
   getArgValue('--db-path') ||
   process.env.SCRATCHPAD_DB_PATH ||
-  path.join(process.cwd(), 'scratchpad.v6.db');
+  path.join(process.cwd(), 'scratchpad.db');
 
 console.log('🚀 Workflow Viewer Server');
 console.log(`📁 資料庫位置: ${DB_PATH}`);
@@ -496,13 +496,13 @@ async function handleStaticFile(req, res, pathname) {
 
     // 生成基於文件修改時間和大小的 ETag
     const etag = `"${stats.mtime.getTime()}-${stats.size}"`;
-    
+
     // 檢查條件請求：如果文件沒有變化，返回 304
     const ifNoneMatch = req.headers['if-none-match'];
     if (ifNoneMatch === etag) {
-      res.writeHead(304, { 
-        'ETag': etag,
-        'Last-Modified': stats.mtime.toUTCString()
+      res.writeHead(304, {
+        ETag: etag,
+        'Last-Modified': stats.mtime.toUTCString(),
       });
       res.end();
       return;
@@ -524,14 +524,12 @@ async function handleStaticFile(req, res, pathname) {
     const contentType = contentTypes[ext] || 'application/octet-stream';
 
     // 智慧緩存策略：開發模式完全禁用，生產模式使用短期緩存+條件請求
-    const cacheControl = isDev 
-      ? 'no-cache, no-store, must-revalidate' 
-      : 'public, max-age=300'; // 5分鐘而非1小時
+    const cacheControl = isDev ? 'no-cache, no-store, must-revalidate' : 'public, max-age=300'; // 5分鐘而非1小時
 
     res.writeHead(200, {
       'Content-Type': contentType,
       'Cache-Control': cacheControl,
-      'ETag': etag,
+      ETag: etag,
       'Last-Modified': stats.mtime.toUTCString(),
     });
 
