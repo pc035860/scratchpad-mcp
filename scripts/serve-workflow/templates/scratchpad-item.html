@@ -6,7 +6,9 @@
       <span class="meta-item">🕒 {{scratchpad.relativeTime}}</span>
     </div>
     <div class="scratchpad-controls">
-      <button class="btn-focus" data-scratchpad-id="{{scratchpad.id}}" type="button" title="專注檢視此 scratchpad">專注</button>
+      <button class="btn-edit" data-scratchpad-id="{{scratchpad.id}}" data-scratchpad-title="{{scratchpad.title}}" type="button" title="編輯內容">✏️ 編輯</button>
+      <button class="btn-delete" data-scratchpad-id="{{scratchpad.id}}" data-scratchpad-title="{{scratchpad.title}}" type="button" title="刪除 scratchpad">🗑️ 刪除</button>
+      <button class="btn-focus" data-scratchpad-id="{{scratchpad.id}}" type="button" title="專注檢視此 scratchpad">👁️ 專注</button>
     </div>
   </div>
   <div class="markdown-with-lines" data-line-count="{{scratchpad.lineCount}}" data-raw-b64="{{scratchpad.rawB64}}">

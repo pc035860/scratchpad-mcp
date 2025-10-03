@@ -436,11 +436,62 @@ class WorkflowDatabase {
   // 更新 workflow project scope
   updateWorkflowScope(id, projectScope) {
     const updateStmt = this.db.prepare(`
-      UPDATE workflows 
-      SET project_scope = ?, updated_at = unixepoch() 
+      UPDATE workflows
+      SET project_scope = ?, updated_at = unixepoch()
       WHERE id = ?
     `);
     const result = updateStmt.run(projectScope || null, id);
+    return result.changes > 0;
+  }
+
+  // 更新 scratchpad 內容
+  updateScratchpadContent(id, newContent) {
+    const existing = this.getScratchpadById(id);
+    if (!existing) {
+      throw new Error(`Scratchpad not found: ${id}`);
+    }
+
+    const newSizeBytes = Buffer.byteLength(newContent, 'utf8');
+
+    const updateStmt = this.db.prepare(`
+      UPDATE scratchpads
+      SET content = ?,
+          size_bytes = ?,
+          updated_at = unixepoch()
+      WHERE id = ?
+    `);
+
+    updateStmt.run(newContent, newSizeBytes, id);
+
+    // 更新 workflow 時間戳（觸發 SSE）
+    const updateWorkflowStmt = this.db.prepare(`
+      UPDATE workflows SET updated_at = unixepoch() WHERE id = ?
+    `);
+    updateWorkflowStmt.run(existing.workflow_id);
+
+    // 驗證過 scratchpad 存在後，即使內容沒變也視為成功
+    return true;
+  }
+
+  // 刪除 scratchpad
+  deleteScratchpad(id) {
+    const existing = this.getScratchpadById(id);
+    if (!existing) {
+      throw new Error(`Scratchpad not found: ${id}`);
+    }
+
+    const deleteStmt = this.db.prepare(`
+      DELETE FROM scratchpads WHERE id = ?
+    `);
+
+    const result = deleteStmt.run(id);
+
+    // 更新 workflow 時間戳（觸發 SSE）
+    const updateWorkflowStmt = this.db.prepare(`
+      UPDATE workflows SET updated_at = unixepoch() WHERE id = ?
+    `);
+    updateWorkflowStmt.run(existing.workflow_id);
+
     return result.changes > 0;
   }
 }
@@ -1135,6 +1186,103 @@ async function handleUpdateWorkflowScope(req, res, params) {
   }
 }
 
+// 處理 scratchpad 內容更新
+async function handleUpdateScratchpadContent(req, res, params) {
+  try {
+    const scratchpadId = params[1];
+
+    if (req.method !== 'PUT') {
+      res.writeHead(405, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: '方法不允許' }));
+      return;
+    }
+
+    // 讀取請求 body
+    let body = '';
+    req.on('data', (chunk) => {
+      body += chunk.toString();
+    });
+    await new Promise((resolve) => {
+      req.on('end', resolve);
+    });
+
+    let requestData;
+    try {
+      requestData = JSON.parse(body);
+    } catch (e) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: '無效的 JSON 格式' }));
+      return;
+    }
+
+    const { content } = requestData;
+
+    // 驗證參數
+    if (typeof content !== 'string') {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'content 必須是字串' }));
+      return;
+    }
+
+    // 執行更新（成功或拋出異常）
+    workflowDB.updateScratchpadContent(scratchpadId, content);
+
+    // 回傳更新後的 scratchpad
+    const updated = workflowDB.getScratchpadById(scratchpadId);
+
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(
+      JSON.stringify({
+        success: true,
+        scratchpad: updated,
+        message: '內容已更新',
+      })
+    );
+  } catch (error) {
+    console.error('更新 scratchpad 內容失敗:', error);
+
+    const statusCode = error.message.includes('not found') ? 404 : 500;
+    res.writeHead(statusCode, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ error: error.message }));
+  }
+}
+
+// 處理 scratchpad 刪除
+async function handleDeleteScratchpad(req, res, params) {
+  try {
+    const scratchpadId = params[1];
+
+    if (req.method !== 'DELETE') {
+      res.writeHead(405, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: '方法不允許' }));
+      return;
+    }
+
+    // 執行刪除
+    const success = workflowDB.deleteScratchpad(scratchpadId);
+
+    if (!success) {
+      res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: `Scratchpad not found: ${scratchpadId}` }));
+      return;
+    }
+
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(
+      JSON.stringify({
+        success: true,
+        message: 'Scratchpad 已刪除',
+      })
+    );
+  } catch (error) {
+    console.error('刪除 scratchpad 失敗:', error);
+
+    const statusCode = error.message.includes('not found') ? 404 : 500;
+    res.writeHead(statusCode, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ error: error.message }));
+  }
+}
+
 async function handleHealth(req, res, params) {
   const health = {
     status: 'healthy',
@@ -1237,6 +1385,8 @@ router.addRoute('GET', '^/api/scratchpad/([a-f0-9-]+)/html$', handleApiScratchpa
 router.addRoute('GET', '^/sse/scratchpad/([a-f0-9-]+)$', handleSSEScratchpad);
 router.addRoute('PUT', '^/api/workflow/([a-f0-9-]+)/active$', handleUpdateWorkflowActive);
 router.addRoute('PUT', '^/api/workflow/([a-f0-9-]+)/scope$', handleUpdateWorkflowScope);
+router.addRoute('PUT', '^/api/scratchpad/([a-f0-9-]+)/content$', handleUpdateScratchpadContent);
+router.addRoute('DELETE', '^/api/scratchpad/([a-f0-9-]+)$', handleDeleteScratchpad);
 router.addRoute('GET', '^/health$', handleHealth);
 
 /**

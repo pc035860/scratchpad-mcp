@@ -805,3 +805,132 @@ body.view-rendered .markdown-with-lines .line-gutter {
 /* 渲染/原始 視圖切換下的顯示控制（預設顯示渲染內容） */
 body.view-raw .markdown-with-lines .markdown-content { display: none; }
 body.view-rendered .markdown-with-lines .raw-view { display: none; }
+
+/* ===== Scratchpad Editor 樣式 ===== */
+
+/* 編輯器容器 */
+.scratchpad-edit-mode {
+  padding: 1rem;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  margin-top: 0.5rem;
+}
+
+/* 編輯器文字區 */
+.scratchpad-editor {
+  width: 100%;
+  min-height: 400px;
+  padding: 1rem;
+  font-family: 'Monaco', 'Consolas', 'Courier New', monospace;
+  font-size: 14px;
+  line-height: 1.6;
+  border: 2px solid var(--border);
+  border-radius: 4px;
+  resize: vertical;
+  background: var(--background);
+  color: var(--text);
+}
+
+.scratchpad-editor:focus {
+  outline: none;
+  border-color: var(--primary-color);
+}
+
+/* 編輯器操作按鈕容器 */
+.editor-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  justify-content: flex-end;
+}
+
+/* 編輯/刪除按鈕樣式 */
+.btn-edit,
+.btn-delete,
+.btn-save,
+.btn-cancel {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: all 0.2s ease;
+}
+
+.btn-edit:hover {
+  background: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+}
+
+.btn-delete:hover {
+  background: #dc3545;
+  color: white;
+  border-color: #dc3545;
+}
+
+.btn-save:hover {
+  background: #28a745;
+  color: white;
+  border-color: #28a745;
+}
+
+.btn-cancel:hover {
+  background: #6c757d;
+  color: white;
+  border-color: #6c757d;
+}
+
+.btn-edit:disabled,
+.btn-delete:disabled,
+.btn-save:disabled,
+.btn-cancel:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 淡出動畫（刪除時使用） */
+.scratchpad-item.fade-out {
+  opacity: 0;
+  transition: opacity 0.3s ease-out;
+}
+
+/* Toast 訊息系統 */
+.toast {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 1rem 1.5rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: 1000;
+  max-width: 400px;
+}
+
+.toast.show {
+  opacity: 1;
+}
+
+.toast.toast-success {
+  background: #d4edda;
+  border-color: #c3e6cb;
+  color: #155724;
+}
+
+.toast.toast-error {
+  background: #f8d7da;
+  border-color: #f5c6cb;
+  color: #721c24;
+}
+
+.toast.toast-warning {
+  background: #fff3cd;
+  border-color: #ffeeba;
+  color: #856404;
+}
